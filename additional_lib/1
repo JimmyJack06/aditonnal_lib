@@ -1902,8 +1902,7 @@ IMG_WORD CVisAlignSearch::generate_mask_core(IMG_UWBUF const *puwbCombined,
 	ubbEdgeSource.size.width = szLevel[1].width;
 	ubbEdgeSource.size.height = (szLevel[1].height*NUM_OF_DIRECTION);
 	ubbEdgeSource.linestep = ulXLinestep2;
-	if(g_ulSrchTimestamp[ulReductionLevel] != pstSrchOpt ->ulSrchTimestamp || 
-		g_ppEdgeDirection[ulReductionLevel] == NULL)
+	if(false)
 	{
 		//g_ppEdgeDirection[ulReductionLevel]= (IMG_VVOID **)CVisMemPool::PMalloc(lwChannel*NUM_OF_DIRECTION*sizeof(IMG_UBYTE *)+16);
 		pSource = (IMG_UBYTE **)mem_pool.Malloc(lwChannel*NUM_OF_DIRECTION*sizeof(IMG_UBYTE *));
