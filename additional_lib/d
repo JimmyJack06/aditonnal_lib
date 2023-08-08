@@ -4174,10 +4174,6 @@ IMG_VVOID CVisAlignSearch::search(IMG_UBBUF & SrcImage, IMG_UBBUF *mask)
 	ALIGN_SEARCH_OPTION *pstSrchOpt = m_SearchOption.GetSearchPara();
 	VIS_ALIGN_RECORD *pstRec = m_AlignRecord->GetRecord();
 	IMG_UINT ulReduction = pstSrchOpt->ubRedFactor > pstRec->ulNumOfLayer - 1 ? pstRec->ulNumOfLayer - 1 : pstSrchOpt->ubRedFactor;
-	if (ulReduction == 0 && (SrcImage.size.height > 10000 || SrcImage.size.width > 10000))
-	{
-		ulReduction = 1;
-	}
 	IMG_UINT ulLowestLayer = pstRec->ulHighestLayer + ulReduction;
 	IMG_UINT ulHighestLayer = pstRec->ulHighestLayer;
 	IMG_REAL rRejMargin[] = { 1.0, 0.85, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7 };
@@ -5840,7 +5836,7 @@ IMG_VVOID CVisAlignSearchInterData::edgeDetectInit(int _botLev)
 	//ubbufEdSrc.size = { ubbufReduction[_botLev].size.width,ubbufReduction[_botLev].size.height };
 	//ubbufEdSrc.linestep = ubbufEdSrc.size.width;
 
-	pEdDstMag.ptr = (IMG_WORD*)pool.PMalloc(sizeof(IMG_WORD)*ubbufReduction[_botLev].size.width*(size_t)ubbufReduction[_botLev].size.height);
+	pEdDstMag.ptr = (IMG_WORD*)pool.PMalloc(sizeof(IMG_WBUF)*ubbufReduction[_botLev].size.width*(size_t)ubbufReduction[_botLev].size.height);
 	VALIDATE_MALLOC(pEdDstMag.ptr);
 	pEdDstMag.size = { ubbufReduction[_botLev].size.width,ubbufReduction[_botLev].size.height };
 	pEdDstMag.linestep = ubbufEdSrc.size.width;
@@ -5902,7 +5898,7 @@ CVisAlignResult::CVisAlignResult()
 {
 	m_result = (ALIGN_SRCH_RESULT *)CVisMemPool::PMalloc(sizeof(ALIGN_SRCH_RESULT));
 	VALIDATE_MALLOC(m_result);
-	m_result->maxsize = 40000;
+	m_result->maxsize = 4000;
 	m_result->size = 0;
 	m_result->mode = 0;
 	m_result->ptr = (IMG_OBJ*)CVisMemPool::PMalloc(sizeof(IMG_OBJ) * m_result->maxsize);
