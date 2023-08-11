@@ -437,16 +437,18 @@ private:
 	CVisCircleResult* result_;
 };
 
-/** @example bmVisAlign/testBmVisAlign.hpp
-An example using Template Matching algorithm
-*/
 /**
  * @brief 模板学习
+ * @include bmVisAlign/testBmVisAlign.hpp
  * @param learnImage 图像
  * @param learnOption 参数
  * @param record 结果模板
  * @return code 0 ok -1 error
 */
+/** @example bmVisAlign/testBmVisAlign.hpp
+An example using Template Matching algorithm
+*/
+
 VIS_2D_API bmvis_status bmvis_align_learn(IMG_UBBUF* learnImage, bmVisAlignLearnOption* learnOption, bmVisAlignRecord* record, IMG_UBBUF* maskImage = nullptr);
 
 /**
