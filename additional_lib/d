@@ -438,13 +438,13 @@ private:
 };
 
 /** @example testBmVisAlign.hpp
-An example using Template Matching algorithm
+模板匹配demo
 */
 
 /**
- * @brief 模板学习
+ * @brief 模板学习（或者叫注册图样）
  * 
-基于边缘特征点匹配的通用模版定位方法，自动学习特征点。
+基于边缘特征点匹配的通用模版定位方法，自动学习特征点，用于后续模板搜索。
 
 特征选择原则：
 1. 选择强边缘
@@ -454,11 +454,12 @@ An example using Template Matching algorithm
 5. 各个方向的特征尽量选
 
 参考demo：
- * @ref testBmVisAlign.hpp
+ #testBmVisAlign.hpp
 
- * @param learnImage 图像
- * @param learnOption 参数
- * @param record 结果模板
+ * @param[in] learnImage 输入图像，目前支持8bit 单通道
+ * @param[in] learnOption 学习参数，包括设置参考点，设置金字塔层数等。参考 #bmVisAlignLearnOption
+ * @param[out] record 结果模板
+ * @param[in] maskImage 掩码图像
  * @return code 0 ok -1 error
  */
 
