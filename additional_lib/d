@@ -448,6 +448,7 @@ An example using Template Matching algorithm
  * @param learnOption 参数
  * @param record 结果模板
  * @return code 0 ok -1 error
+ * @ref bmVisAlign/testBmVisAlign.hpp
 */
 
 VIS_2D_API bmvis_status bmvis_align_learn(IMG_UBBUF* learnImage, bmVisAlignLearnOption* learnOption, bmVisAlignRecord* record, IMG_UBBUF* maskImage = nullptr);
