@@ -437,7 +437,7 @@ private:
 	CVisCircleResult* result_;
 };
 
-/** @example testBmVisAlign.hpp
+/** @example bmVisAlign/testBmVisAlign.hpp
 An example using Template Matching algorithm
 */
 /**
