@@ -1,915 +1,368 @@
-﻿// additional_lib.cpp : 定义控制台应用程序的入口点。
-//
+#pragma once
+#include <ViType.h>
+#include <memory.h>
 
-#include "stdafx.h"
-#include <opencv2/opencv.hpp>
-#include <ipp.h>
-#include <mkl.h>
+#ifdef  DLL_EXPORTS
+#define DLLEXPORT __declspec(dllexport)
+#else
+#define DLLEXPORT __declspec(dllimport)   
+#endif
 
-using namespace cv;
-using namespace std;
+#define MAX_FILE_NAME (2560)
+#define MAX_CHANNEL_NUM (100)
+#define PLATTE_SIZE (1024)
+#define JPG_SIZE_LIMITATION (65000)
 
-#pragma region <图像批量存取相关> 
-const int IMG_COUNT = 100;    //<图像序列总数
-/**
-* @brief <B>Destription:</B><br> 批量重命名图像（亦可用在无法打开图片数据间接使用opencv读存）
-*
-* @param[in] start_No 名字开始序号
-* @param[in] end_No 名字结束序号
-*
-* @brief 使用时注意更改路径！！！
-*/
-void tranSaveImg(int start_No, int end_No)
+enum IMAGE_TYPE
 {
-	Mat testImg;
-	char file[IMG_COUNT];
-	char newfile[IMG_COUNT];
-	//int file_No = 0;
-	for (int i = start_No; i <= end_No; i++)
+	BMP_TYPE = 0,
+	TIFF_TYPE = 1,
+	JPG_TYPE = 2,
+	PNG_TYPE = 3,
+	UNKNOWN_TYPE = 4
+};
+
+enum PIXEL_TYPE
+{
+	VIS_IMG_UINT8,
+	VIS_IMG_SHORT16,
+	VIS_IMG_REAL, //32f
+};
+
+enum CHANNEL_INFO
+{
+	VIS_IMG_GRAY = 1,
+	VIS_IMG_RGB = 3,
+	VIS_IMG_ARGB = 4
+};
+
+enum Threshold_TYPE
+{
+	CmpLess = 0,
+	CmpLessEq = 1,
+	CmpEq = 2,
+	CmpGreaterEq = 3,
+	CmpGreater = 4
+};
+
+enum Axis {
+	AxsHorizontal = 0,
+	AxsVertical = 1,
+	AxsBoth = 2,
+	Axs45 = 3,
+	Axs135 = 4
+};
+
+enum Mesurement {
+	MesureSum = 0, // IMG_REAL m = MesureSum
+	MesureMean = 1,// IMG_REAL m = MesureMean
+	MesureStd = 2,// IMG_REAL m = MesureStd
+	MesureArea = 3,	// IMG_REAL m = MesureArea
+	MesureMin = 4, // IMG_REAL m[3] = {min_value, position_x, position_y}
+	MesureMax = 5, // IMG_REAL m[3] = {max_value, position_x, position_y}
+	MesureCentroid = 6, // IMG_REAL m[3] = {centermass_value, position_x, position_y}
+	MesureCenterpoint = 7,  // IMG_REAL m[3] = {center_value, position_x, position_y}
+	MesureAll = 8   // IMG_REAL m[16] = {MesureSum, MesureMean, MesureStd, MesureArea, min_value, position_x, position_y, max_value, position_x, position_y, 
+					//centermass_value, position_x, position_y,  center_value, position_x, position_y}
+};
+
+
+enum POSITION {
+
+	TOP_LEFT = 11,
+	TOP_CENTER = 12,
+	TOP_RIGHT = 13,
+	CENTER_LEFT = 21,
+	CENTER = 22,
+	CENTER_RIGHT = 23,
+	BOTTOM_LEFT = 31,
+	BOTTOM_CENTER = 32,
+	BOTTOM_RIGHT = 33
+};
+
+enum COLORS {
+	Black = 0,			//0,0,0
+	White = 1,			//255,255,255
+	Red = 2,				//255,0,0
+	Green = 3,			//0,255,0
+	Blue = 4,				//0,0,255
+	Cyan = 5,			//0,255,255
+	Fuchsia = 6,		//255,0,255
+	Yellow = 7,			//255,255,0
+};
+
+struct DLLEXPORT VIS_IMAGE_INFO
+{
+	IMG_INT width;
+	IMG_INT height;
+	IMG_INT byte_per_pixel;
+	IMG_INT page_num;
+	CHANNEL_INFO channel;
+	IMG_INT palette_size = 0;
+	IMG_INT sample_per_pixel;
+	enum PIXEL_TYPE pixel_type;		//necessary, pixel type, self explain
+	enum IMAGE_TYPE img_type;		//necessary, state image channel, self explain
+	IMG_INT linestep;
+
+	void clear()
 	{
-		sprintf(file, "repeat_testImg/%u.bmp", i);
-		sprintf(newfile, "repeat_testImg/%u(1).bmp", i);
-		testImg = imread(file, 0);
-		imwrite(newfile, testImg);
+		memset(this, 0x00, sizeof(VIS_IMAGE_INFO));
 	}
-}
 
-/**
-* @brief <B>Destription:</B><br> 批量读取图像序列
-*
-* @param Src 指针数组，存图像序列地址Src[0]表示首张图首地址。
-* @param[in] start_No 名字开始序号
-* @param[in] end_No 名字结束序号
-* @param[out] rows 返回图像高
-* @param[out] cols 返回图像宽
-*
-* @brief 使用时注意更改路径！！！
-*/
-void autoReadImg(unsigned char **&Src, int start_No, int end_No, int &rows, int &cols)
-{
-	Src = (unsigned char **)malloc(sizeof(unsigned char*) * IMG_COUNT);
-	char file[IMG_COUNT];
-	int img_No = 0;
-	for (int i = start_No; i <= end_No; i++)
+	VIS_IMAGE_INFO& operator=(const VIS_IMAGE_INFO& o) // rewrite operator=
 	{
-		sprintf(file, "%u.bmp", i);
-		Mat midMat = imread(file, 0);			//局部变量！！！！
-		unsigned char *temp = midMat.data;
-		Src[img_No] = (unsigned char *)malloc(sizeof(unsigned char) * midMat.rows * midMat.cols);
-		for (int y = 0; y < midMat.rows; y++)
+		width = o.width;
+		height = o.height;
+		byte_per_pixel = o.byte_per_pixel;
+		page_num = o.page_num;
+		channel = o.channel;
+		palette_size = o.palette_size;
+		pixel_type = o.pixel_type;
+		img_type = o.img_type;
+		sample_per_pixel = o.sample_per_pixel;
+		linestep = o.linestep;
+		return *this;
+	}
+
+	bool operator!=(const VIS_IMAGE_INFO& o) // rewrite operator!=
+	{
+		bool state = true;
+		if (width == o.width && height == o.height && byte_per_pixel == o.byte_per_pixel
+			&& page_num == o.page_num && channel == o.channel
+			&& palette_size == o.palette_size && pixel_type == o.pixel_type
+			&& sample_per_pixel == o.sample_per_pixel && linestep == o.linestep)
 		{
-			for (int x = 0; x < midMat.cols; x++)
-			{
-				Src[img_No][y * midMat.cols + x] = temp[y * midMat.cols + x];
-			}
+			state = false;
 		}
-		img_No++;
-		//imshow(file, midMat);
-		//waitKey(0);
-		rows = midMat.rows;
-		cols = midMat.cols;
+		return state;
 	}
-}
 
-/**
-* @brief <B>Destription:</B><br> 对应批量读取图像序列函数，释放指针数组
-*
-* @param Src 指针数组，存图像序列地址Src[0]表示首张图首地址。
-*
-* @brief 使用时注意更改路径！！！
-*/
-void freeMat(unsigned char **Src)
+};
+
+struct VIS_IMG_FILE_INFO
 {
-	free(Src);
-}
-#pragma endregion<图像批量存取相关> 
+	IMG_UBYTE path[MAX_FILE_NAME];
+};
 
-#pragma region<文件读写相关> 
-
-//FREOPEN
-#ifdef FREOPEN
-	freopen("test_out.out", "w", stdout);
-#endif // FREOPEN
-
-///////////			C++			///////////////
-#include <fstream>
-void outputFileCpp()
+struct edgeInformation
 {
-	ofstream outfile("data.txt");
-	for (int i = 0; i < 10; i++)
-		outfile << i << " ";
-	cout << "ok" << endl;
-	getchar();
-	outfile.close();
-}
-
-void inputFileCpp()
+	IMG_ICOORD xyInteger; //像素点
+	IMG_RCOORD xyDecimal;//亚像素点
+	int gradient;//灰度梯度
+	int grayValue;//灰度值
+	float angle;//角度
+	bool operator == (const edgeInformation &value)
+	{
+		return (xyInteger.x == value.xyInteger.x&&
+			xyInteger.y == value.xyInteger.y&&
+			xyDecimal.x == value.xyDecimal.x&&
+			xyDecimal.y == value.xyDecimal.y&&
+			gradient == value.gradient&&
+			grayValue == value.grayValue&&
+			angle == value.angle);
+	}
+	edgeInformation& operator=(edgeInformation& value)
+	{
+		xyInteger.x = value.xyInteger.x;
+		xyInteger.y = value.xyInteger.y;
+		xyDecimal.x = value.xyDecimal.x;
+		xyDecimal.y = value.xyDecimal.y;
+		gradient = value.gradient;
+		grayValue = value.grayValue;
+		angle = value.angle;
+		return *this;
+	}
+};//边缘点 
+typedef struct _TIFF_FILE_INFORMATION
 {
-	int data;
-	ifstream infile("data.txt");
-	for (int i = 0; i < 10; i++)
-	{
-		infile >> data;
-		cout << data << " ";
-	}
-	infile.close();
-}
+	IMG_RCOORD xyWorld;
+	IMG_RSIZE szWorldResolution;
+}VIS_TIFF_INFOMATION;
 
-///////////		C			/////////////////////////////
-void outputFileC()
+class  DLLEXPORT CVisImage
 {
-	FILE *pOutfile = fopen("data.txt", "w+");
-	int a = 1;
-	for (int i = 0; i < 5; i++)
-	{
-		for (int j = 0; j < 5; j++)
-		{
-			fprintf(pOutfile, "%d ", a++ );
-		}
-		fprintf(pOutfile, "\n");
-	}
-	fclose(pOutfile);
-}
-
-void inputFileC()
-{
-	FILE *pInfile = fopen("data.txt", "w+");
-	int a = 1;
-	for (int i = 0; i < 5; i++)
-	{
-		for (int j = 0; j < 5; j++)
-		{
-			fscanf(pInfile, "%d ", &a);
-		}
-		//fprintf(pInfile, "\n");
-	}
-	fclose(pInfile);
-}
-
-#pragma endregion<文件读写相关> 
-
-#pragma region<动态申请空间> 
-void newSpace()
-{
-	int *p1 = new int;
-	int *p2 = new int[1000];
-	delete p1;
-	delete[] p2;
-
-	int *p3 = (int*)malloc(sizeof(int) * 1000);
-	free(p3);
-}
-#pragma endregion<动态申请空间> 
-
-#pragma  region<IPP related>
-void threshold_OTSU()
-{
-	Mat srcImg = imread("2.bmp", 0);
-	unsigned char *pSrc = srcImg.data;
-	cout << (double)(*pSrc) << endl;
-	int srcStep = srcImg.cols * sizeof(unsigned char);
-	IppiSize roiSize = { srcImg.cols,srcImg.rows };
-	unsigned char *pThreshold = pSrc;
-	ippiComputeThreshold_Otsu_8u_C1R( pSrc, srcStep,  roiSize,  pThreshold);	//*pSrc change	
-	cout << (double)(*pThreshold) << endl;
-	//ofstream outImg("outImg.txt");
-	//for (int i = 0; i < srcImg.rows; i++)
-	//{
-	//	for (int j = 0; j < srcImg.cols; j++)
-	//	{
-	//		outImg << (double)pSrc[i * srcImg.cols + j]<<" ";
-	//	}
-	//	outImg << endl;
-	//}
-	//outImg.close();
-	unsigned char OSTUthreshold = *pThreshold;		//important
-	for (int i = 0; i < srcImg.rows; i++)
-	{
-		for (int j = 0; j < srcImg.cols; j++)
-		{
-			if ((pSrc[i * srcImg.cols + j]) <= OSTUthreshold)
-			{
-				//cout << i << endl;
-				pSrc[i * srcImg.cols + j] = 0;
-			}
-			else
-			{
-				pSrc[i * srcImg.cols + j] = 255;
-			}
-		}
-	}
-	imwrite("thresholdedImg.bmp", srcImg);
-}
-
-#pragma endregion<IPP related>
-
-#pragma region<边缘检测相关>
-#define PI 3.1415926
-typedef struct
-{
-	signed short  x;
-	signed short  y;
-} IMG_COORD;
-
-typedef struct
-{
-	float   x;
-	float   y;
-} IMG_RCOORD;
-typedef struct 
-{
-	IMG_COORD xyInteger;
-	IMG_RCOORD xyDecimal;
-	int gradient;
-	float angle;
-}edgeInformation;
-
-void SobelFilter_8u16s_C1_3x3or5x5(unsigned char *pSrc, IppiSize roiSize, int kernalSize,
-	signed short *&pDst, float *&pAngle, int srcStep)
-{
-	IppiMaskSize mask = ippMskSize3x3;
-	if (kernalSize == 3)
-	{
-		mask = ippMskSize3x3;
-	}
-	else
-	{
-		if (kernalSize == 5)
-		{
-			mask = ippMskSize5x5;
-		}
-	}
-
-	IppiBorderType bordertype = ippBorderRepl; //Border is replicated from the edge pixels
-	signed short *pHoriz, *pVert;
-	//int srcStep = roiSize.width * sizeof(unsigned char);
-	int dstStep = roiSize.width * sizeof(signed short);
-	int angleStep = roiSize.width * sizeof(float);
-	int bufferSize;
-	int bufLen = roiSize.width * roiSize.height;
-	IppStatus statusVert, statusHoriz, status;
-	unsigned char *pBuffer;
-	IppNormType normType = ippNormL2;//input gradient magnitude
-
-	pVert = (signed short *)malloc(sizeof(Ipp16s)*bufLen);
-	pHoriz = (signed short *)malloc(sizeof(signed short)*bufLen);
-	pAngle = (float *)malloc(sizeof(float)*bufLen);
-	pDst = (signed short *)malloc(sizeof(signed short)*bufLen);
-
-	ippiGradientVectorGetBufferSize(roiSize, mask, ipp16s, 1, &bufferSize);
-	pBuffer = (unsigned char *)malloc(bufferSize);
-	ippiGradientVectorSobel_8u16s_C1R(pSrc, srcStep, pVert, dstStep, pHoriz, dstStep, pDst, dstStep, pAngle, angleStep, roiSize, mask, normType, bordertype, NULL, pBuffer);
-
-	free(pVert);
-	free(pHoriz);
-	free(pBuffer);
-}
-
-void edge_detection(unsigned char *srcRoi, int roiRows, int roiCols, int threshold, int kernalSize, signed short *&dstRoi,
-	Ipp16u *dstRoiE, float *&angAll, edgeInformation *&edgeArray, int &sn)//std::vector<edgeInformation> &edgeInfor)
-{
-	std::vector<edgeInformation> edgeInfor;
-	edgeInformation edInf;
-
-	int k = 0;//记录边缘点的个数
-	int k1;//抛物线拟合的三个已知点
-	int k2;
-	int k3;
-	float deci;//抛物线拟合顶点的小数部分，即对应的亚像素
-	float sumx = 0;//边缘点的x坐标之和
-	float sumy = 0;
-	int numberChannels = 1; //the source image is single channel
-
-	IppiSize dstRoiSize = { roiCols,roiRows };
-
-	SobelFilter_8u16s_C1_3x3or5x5(srcRoi, dstRoiSize, kernalSize, dstRoi, angAll, roiCols);
-
-	//把角度由[-pi，pi]变为[0，360]
-	for (int i = 0; i < roiRows; i++)
-	{
-		for (int j = 0; j < roiCols; j++)
-		{
-			angAll[j + i * roiCols] = (float)(180 - angAll[j + i * roiCols] / PI * 180);
-		}
-	}
-
-	/*FILE *sx;
-	sx = fopen("E:\\project03\\learn\\a1sobel.txt", "w");
-	FILE *ang;
-	ang = fopen("E:\\project03\\learn\\a1ang.txt", "w");
-	for (int i = 0; i<roiRows; i++)
-	{
-	for (int j = 0; j < roiCols; j++)
-	{
-
-	fprintf(sx, "%3d   ", dstRoi[j+i*roiCols]);
-	fprintf(ang, "%f   ", angAll[j+i*roiCols]);
-	}
-	fprintf(sx,"\n");
-	fprintf(ang, "\n");
-	}*/
-
-	//fclose(ang);
-
-	for (int i = 1; i<roiRows - 1; i++)
-	{
-		for (int j = 1; j<roiCols - 1; j++)
-		{
-			if (dstRoi[j + i*roiCols] > threshold)
-			{
-				//angAll[j + i * roiCols] = (float)180 - angAll[j + i * roiCols] / PI * 180;
-				if ((angAll[j + i*roiCols]>22.5) && (angAll[j + i*roiCols]<67.5))
-				{
-					if ((dstRoi[j + i*roiCols] > dstRoi[j - 1 + (i - 1)*roiCols]) && (dstRoi[j + i*roiCols] >= dstRoi[(j + 1) + (i + 1)*roiCols]))
-					{
-						k1 = dstRoi[j - 1 + (i - 1)*roiCols];
-						k2 = dstRoi[j + i*roiCols];
-						k3 = dstRoi[(j + 1) + (i + 1)*roiCols];
-						deci = (k3 - k1) / ((float)2.0*(2.0*k2 - k1 - k3));
-
-						edInf.xyInteger.x = j;
-						edInf.xyInteger.y = i;
-						edInf.xyDecimal.x = j + deci;
-						edInf.xyDecimal.y = i + deci;
-						edInf.gradient = dstRoi[j + i*roiCols];
-						edInf.angle = angAll[j + i*roiCols];
-						edgeInfor.push_back(edInf);
-						k++;
-					}
-				}
-				else
-				{
-					if ((angAll[j + i*roiCols]>202.5) && (angAll[j + i*roiCols]<247.5))
-					{
-						if ((dstRoi[j + i*roiCols] > dstRoi[j - 1 + (i - 1)*roiCols]) && (dstRoi[j + i*roiCols] >= dstRoi[(j + 1) + (i + 1)*roiCols]))
-						{
-							k3 = dstRoi[j - 1 + (i - 1)*roiCols];
-							k2 = dstRoi[j + i*roiCols];
-							k1 = dstRoi[(j + 1) + (i + 1)*roiCols];
-							deci = (k3 - k1) / ((float)2.0*(2.0*k2 - k1 - k3));
-
-							edInf.xyInteger.x = j;
-							edInf.xyInteger.y = i;
-							edInf.xyDecimal.x = j - deci;
-							edInf.xyDecimal.y = i - deci;
-							edInf.gradient = dstRoi[j + i*roiCols];
-							edInf.angle = angAll[j + i*roiCols];
-							edgeInfor.push_back(edInf);
-							k++;
-						}
-					}
-					else
-					{
-						if ((angAll[j + i*roiCols]>112.5) && (angAll[j + i*roiCols]<157.5))
-						{
-
-							if ((dstRoi[j + i*roiCols] > dstRoi[(j + 1) + (i - 1)*roiCols]) && (dstRoi[j + i*roiCols] >= dstRoi[(j - 1) + (i + 1)*roiCols]))
-							{
-								k1 = dstRoi[(j + 1) + (i - 1)*roiCols];
-								k2 = dstRoi[j + i*roiCols];
-								k3 = dstRoi[(j - 1) + (i + 1)*roiCols];
-								deci = (k3 - k1) / ((float)2.0*(2.0*k2 - k1 - k3));
-
-								edInf.xyInteger.x = j;
-								edInf.xyInteger.y = i;
-								edInf.xyDecimal.x = j - deci;
-								edInf.xyDecimal.y = i + deci;
-								edInf.gradient = dstRoi[j + i*roiCols];
-								edInf.angle = angAll[j + i*roiCols];
-								edgeInfor.push_back(edInf);
-								k++;
-							}
-						}
-						else
-						{
-							if ((angAll[j + i*roiCols]>292.5) && (angAll[j + i*roiCols]<337.5))
-							{
-								if ((dstRoi[j + i*roiCols] > dstRoi[(j + 1) + (i - 1)*roiCols]) && (dstRoi[j + i*roiCols] >= dstRoi[(j - 1) + (i + 1)*roiCols]))
-								{
-									k3 = dstRoi[(j + 1) + (i - 1)*roiCols];
-									k2 = dstRoi[j + i*roiCols];
-									k1 = dstRoi[(j - 1) + (i + 1)*roiCols];
-									deci = (k3 - k1) / ((float)2.0*(2.0*k2 - k1 - k3));
-
-									edInf.xyInteger.x = j;
-									edInf.xyInteger.y = i;
-									edInf.xyDecimal.x = j + deci;
-									edInf.xyDecimal.y = i - deci;
-									edInf.gradient = dstRoi[j + i*roiCols];
-									edInf.angle = angAll[j + i*roiCols];
-									edgeInfor.push_back(edInf);
-									k++;
-								}
-							}
-							else
-							{
-								if (((angAll[j + i*roiCols] >= -1) && (angAll[j + i*roiCols] <= 22.5)) || ((angAll[j + i*roiCols] >= 337.5) && (angAll[j + i*roiCols] <= 361)))
-								{
-									if ((dstRoi[j + i*roiCols] > dstRoi[(j - 1) + i*roiCols]) && (dstRoi[j + i*roiCols] >= dstRoi[(j + 1) + i*roiCols]))
-									{
-										k1 = dstRoi[(j - 1) + i*roiCols];
-										k2 = dstRoi[j + i*roiCols];
-										k3 = dstRoi[(j + 1) + i*roiCols];
-										deci = (k3 - k1) / ((float)2.0*(2.0*k2 - k1 - k3));
-
-										edInf.xyInteger.x = j;
-										edInf.xyInteger.y = i;
-										edInf.xyDecimal.x = j + deci;
-										edInf.xyDecimal.y = i;
-										edInf.gradient = dstRoi[j + i*roiCols];
-										edInf.angle = angAll[j + i*roiCols];
-										edgeInfor.push_back(edInf);
-										k++;
-									}
-								}
-								else
-								{
-									if ((angAll[j + i*roiCols] <= 202.5) && (angAll[j + i*roiCols] >= 157.5))
-									{
-										if ((dstRoi[j + i*roiCols] > dstRoi[(j - 1) + i*roiCols]) && (dstRoi[j + i*roiCols] >= dstRoi[(j + 1) + i*roiCols]))
-										{
-											k3 = dstRoi[(j - 1) + i*roiCols];
-											k2 = dstRoi[j + i*roiCols];
-											k1 = dstRoi[(j + 1) + i*roiCols];
-											deci = (k3 - k1) / ((float)2.0*(2.0*k2 - k1 - k3));
-
-											edInf.xyInteger.x = j;
-											edInf.xyInteger.y = i;
-											edInf.xyDecimal.x = j - deci;
-											edInf.xyDecimal.y = i;
-											edInf.gradient = dstRoi[j + i*roiCols];
-											edInf.angle = angAll[j + i*roiCols];
-											edgeInfor.push_back(edInf);
-											k++;
-										}
-									}
-									else
-									{
-										if ((angAll[j + i*roiCols] >= 67.5) && (angAll[j + i*roiCols] <= 112.5))
-										{
-
-											if ((dstRoi[j + i*roiCols] > dstRoi[j + (i - 1)*roiCols]) && (dstRoi[j + i*roiCols] >= dstRoi[j + (i + 1)*roiCols]))
-											{
-												k1 = dstRoi[j + (i - 1)*roiCols];
-												k2 = dstRoi[j + i*roiCols];
-												k3 = dstRoi[j + (i + 1)*roiCols];
-												deci = (k3 - k1) / ((float)2.0*(2.0*k2 - k1 - k3));
-
-												edInf.xyInteger.x = j;
-												edInf.xyInteger.y = i;
-												edInf.xyDecimal.x = j;
-												edInf.xyDecimal.y = i + deci;
-												edInf.gradient = dstRoi[j + i*roiCols];
-												edInf.angle = angAll[j + i*roiCols];
-												edgeInfor.push_back(edInf);
-												k++;
-											}
-										}
-										else
-										{
-											if ((angAll[j + i*roiCols] >= 247.5) && (angAll[j + i*roiCols] <= 292.5))
-											{
-												if ((dstRoi[j + i*roiCols] > dstRoi[j + (i - 1)*roiCols]) && (dstRoi[j + i*roiCols] >= dstRoi[j + (i + 1)*roiCols]))
-												{
-													k3 = dstRoi[j + (i - 1)*roiCols];
-													k2 = dstRoi[j + i*roiCols];
-													k1 = dstRoi[j + (i + 1)*roiCols];
-													deci = (k3 - k1) / ((float)2.0*(2.0*k2 - k1 - k3));
-
-													edInf.xyInteger.x = j;
-													edInf.xyInteger.y = i;
-													edInf.xyDecimal.x = j;
-													edInf.xyDecimal.y = i - deci;
-													edInf.gradient = dstRoi[j + i*roiCols];
-													edInf.angle = angAll[j + i*roiCols];
-													edgeInfor.push_back(edInf);
-													k++;
-												}
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	sn = k;
-	for (int t = 0; t < roiCols*roiRows; t++)//二值图像，所有像素先都赋值为0，边缘点赋值255
-	{
-		dstRoiE[t] = 0;
-	}
-	for (int q = 0; q < k; q++)
-	{
-		sumx = sumx + edgeInfor[q].xyDecimal.x;
-		sumy = sumy + edgeInfor[q].xyDecimal.y;
-		dstRoiE[edgeInfor[q].xyInteger.x + edgeInfor[q].xyInteger.y * roiCols] = 255;
-	}
-	//printf("%d\n",k);
-
-	/*
-	FILE *db;
-	db = fopen("E:\\ProjectCameraVerticality\\de.txt","w");
-	for (int i = 0; i < roiRows; i++)
-	{
-	for (int j = 0; j < roiCols; j++)
-	{
-	fprintf(db,"%d   ",dstRoiE[j+i*roiCols]);
-	}
-	fprintf(db,"\n");
-	}
-	fclose(db);
-	*/
-	//以数组的方式传出边缘信息
-	edgeArray = (edgeInformation*)malloc(k*sizeof(edgeInformation));
-	for (int i = 0; i < k; i++)
-	{
-		edgeArray[i] = edgeInfor[i];
-	}
-	//printf("%d\n",k);
-
-	/*FILE *e;
-	e = fopen("E:\\project03\\e.txt", "w");
-	for (int i = 0; i < k; i++)
-	{
-	fprintf(e,"%f   %f   \n", edgeInfor[i].xyDecimal.x, edgeInfor[i].xyDecimal.y);
-	}*/
-
-	//ecout.x = sumx / k;
-	//ecout.y = sumy / k;
-	//ecout.en = k;
-}
-#pragma endregion<边缘检测相关>
-
-
-#pragma region<Fitting related>
-void fitCircle(double *X, double *Y, int _num, double &cx, double &cy, double &radius)
-{
-	//dst vars
-	bool iteration = false;
-	double centerX, centerY, T;		//T = centerX * centerX + centerY * centerY - radius * radius
-
-	//init vars
-	double *matA = (double*)malloc(sizeof(double) * 3 * _num);
-	memset(matA, 0, sizeof(double) * 3 * _num);
-	double *matB = (double*)malloc(sizeof(double) * _num);
-	memset(matB, 0, sizeof(double) *  _num);
-
-	//set vals
-	for (int i = 0; i < _num; i++)
-	{
-		matA[i * 3 + 0] = -2 * X[i];
-		matA[i * 3 + 1] = -2 * Y[i];
-		matA[i * 3 + 2] = 1;
-
-		matB[i] = -X[i] * X[i] - Y[i] * Y[i];
-	}
-	
-	if (!iteration)		//do not iterate
-	{
-		LAPACKE_dgels(LAPACK_ROW_MAJOR, 'N', _num, 3, 1, matA, 3, matB, 1);
-		centerX = matB[0];
-		centerY = matB[1];
-		T = matB[2];
-
-	}
-
-	cx = centerX;
-	cy = centerY;
-	radius = sqrtf(centerX * centerX + centerY * centerY - T);
-
-	//free
-	free(matA);
-	free(matB);
-
-}
-
-void fitLine(double * X, double *Y, int _num, double &lineA, double &lineB, double &lineC)
-{
-	bool iteration = false;
-	bool slope_exist = true;
-	
-
-	//judege if slope is exist(calculate Xi 's variation)
-	double veryMin = 5;
-	double sum = 0;
-	double variation = 0;
-	for (int i = 0; i < _num; i++)
-	{
-		sum += X[i];
-	}
-	double Xmean = sum / _num;
-	sum = 0;
-	for (int i = 0; i < _num; i++)
-	{
-		sum += (X[i] - Xmean) * (X[i] - Xmean);
-	}
-	variation = sum / (_num - 1);
-	if (variation < veryMin)		slope_exist = false;
-
-	if (slope_exist)
-	{
-		double *matA = (double*)malloc(sizeof(double) * 2 * _num);
-		memset(matA, 0, sizeof(double) * 2 * _num);
-		double *matB = (double*)malloc(sizeof(double) * _num);
-		memset(matB, 0, sizeof(double) *  _num);
-
-		for (int i = 0; i < _num; i++)
-		{
-			matA[i * 2 + 0] = X[i];
-			matA[i * 2 + 1] = 1;
-			matB[i] = Y[i];
-		}
-
-		if (!iteration)		//do not iterate
-		{
-			LAPACKE_dgels(LAPACK_ROW_MAJOR, 'N', _num, 2, 1, matA, 2, matB, 1);
-		}
-
-		double k = matB[0];
-		double b = matB[1];
-
-		lineA = k;
-		lineB = -1;
-		lineC = b;
-
-		free(matA);
-		free(matB);
-	}
-	else
-	{
-		lineB = 0;
-		lineA = 1;
-		lineC = -Xmean;
-	}
-	
-}
-#pragma endregion<Fitting related>
-
-#pragma region<异常处理>
-int throwAssertTest()
-{
-	int a;
-	cout << "please input a:" << endl;
-	cin >> a;
-	
-	try {
-		if (a == 0)
-			throw("a cannot be 0!");
-		if (a == 1)
-			throw("a cannot be 1!");
-	}
-	catch (char* s)
-	{
-		printf("%s\n", s);
-		//exit(0);
-	}
-
-	assert(a != -1);
-	return 0;
-}
-
-//class ErrorResult
-//{
-//	int status;
-//	char* errorMessage;
-//};
-
-typedef enum 
-{
-	noError = 0,
-	Error1 = 1,
-	Error2 = 2,
-	Error3 = 3
-}errorType;
-
-char * getErrorMessage(errorType status)
-{
-	char *s = "noError";
-	switch (status)
-	{
-	case Error1:
-		s = "Error1";
-		break;
-	case Error2:
-		s = "Error2";
-		break;
-	case Error3:
-		s = "Error3";
-		break;
-	default:
-		break;
-	}
-	return s;
-}
-
-errorType errorProRet()
-{
-	errorType status = Error1;
-	printf("The status is %s\n", getErrorMessage(status));
-	return status;
-}
-#pragma endregion<异常处理>
-
-
-//test edgeDetect and circle fitting
-int test1()
-{
-	Mat srcImg = imread("circle.bmp", 0);
-	unsigned char *pSrc = srcImg.data;
-
-	int gradThre = 600;
-	int kernSize = 5;
-	signed short *dstGrad = NULL;
-	Ipp16u *dstRoiE;
-	dstRoiE = (Ipp16u*)malloc(srcImg.rows * srcImg.cols *sizeof(Ipp16u));
-	float *angle = NULL;
-
-	//vector<edgeInformation> edgeInfor;
-	edgeInformation *edgeArray;
-	int sn = 0;
-	edge_detection(pSrc, srcImg.rows, srcImg.cols, gradThre, kernSize, dstGrad, dstRoiE, angle, edgeArray, sn);
-
-	//FILE *egA;
-	//egA = fopen("egA.txt", "w");
-	//for (int i = 0; i < sn; i++)
-	//{
-	//fprintf(egA, "%d   %d\n", edgeArray[i].xyInteger.x, edgeArray[i].xyInteger.y);
-	//}
-	//fclose(egA);
-
-	double *X = (double *)malloc(sizeof(double) * sn);
-	double *Y = (double *)malloc(sizeof(double) * sn);
-	for (int k = 0; k < sn; k++)
-	{
-		X[k] = edgeArray[k].xyDecimal.x;
-		Y[k] = edgeArray[k].xyDecimal.y;
-	}
-
-	double cx = 0;
-	double cy = 0;
-	double radius = 0;
-	fitCircle(X, Y, sn, cx, cy, radius);
-	
-	cout << "cx = " << cx << endl << "cy = " << cy << endl << "radius = " << radius << endl;
-	free(X);
-	free(Y);
-
-	return 0;
-}
-
-//test edgeDetect and line fitting
-int test2()
-{
-	Mat srcImg = imread("line(x = 218).bmp", 0);
-	unsigned char *pSrc = srcImg.data;
-
-	int gradThre = 600;
-	int kernSize = 5;
-	signed short *dstGrad = NULL;
-	Ipp16u *dstRoiE;
-	dstRoiE = (Ipp16u*)malloc(srcImg.rows * srcImg.cols *sizeof(Ipp16u));
-	float *angle = NULL;
-
-	//vector<edgeInformation> edgeInfor;
-	edgeInformation *edgeArray;
-	int sn = 0;
-	edge_detection(pSrc, srcImg.rows, srcImg.cols, gradThre, kernSize, dstGrad, dstRoiE, angle, edgeArray, sn);
-
-	//FILE *egA;
-	//egA = fopen("egA.txt", "w");
-	//for (int i = 0; i < sn; i++)
-	//{
-	//fprintf(egA, "%d   %d\n", edgeArray[i].xyInteger.x, edgeArray[i].xyInteger.y);
-	//}
-	//fclose(egA);
-
-	double *X = (double *)malloc(sizeof(double) * sn);
-	double *Y = (double *)malloc(sizeof(double) * sn);
-	for (int k = 0; k < sn; k++)
-	{
-		X[k] = edgeArray[k].xyDecimal.x;
-		Y[k] = edgeArray[k].xyDecimal.y;
-	}
-
-	double lineA = 0;
-	double lineB = 0;
-	double lineC = 0;
-	fitLine(X, Y, sn, lineA, lineB, lineC);
-
-	cout << "line equation: " << lineA << "x + " << lineB << "y + " << lineC << " = 0" << endl;
-
-	free(X);
-	free(Y);
-	return 0;
-}
-
-//int findCentroid(unsigned short *pSrc[], int imgNum, int srcRows, int srcCols, unsigned short threshold,float &xCentroid, float &yCentroid)
-//{
-//	//threshold
-//	int srcStep = srcCols * sizeof(Ipp16u);
-//	IppiSize roiSize = { srcCols,srcRows };
-//	
-//	//add image
-//	Ipp32f* pSumImg = (Ipp32f*)malloc(srcRows * srcCols * sizeof(Ipp32f));
-//	int tempStep = srcCols * sizeof(Ipp32f);
-//
-//	ippiConvert_16u32f_C1R(pSrc[0], srcStep, pSumImg, tempStep, roiSize);
-//	for (int i = 1; i < imgNum; i++)
-//	{
-//		Ipp32f* pTemp = (Ipp32f*)malloc(srcRows * srcCols * sizeof(Ipp32f));
-//		ippiConvert_16u32f_C1R(pSrc[i], srcStep, pTemp, tempStep, roiSize);
-//		ippiAdd_32f_C1IR(pTemp, tempStep, pSumImg, tempStep, roiSize);
-//		free(pTemp);
-//	}
-//	/*FILE *fTest;
-//	fTest = fopen("pSumImg.txt", "w");
-//	for (int i = 0; i < srcRows; i++)
-//	{
-//		for (int j = 0; j < srcCols; j++)
-//		{
-//			fprintf(fTest, "%f  ", (float)pSumImg[j + i*srcCols]);
-//		}
-//		fprintf(fTest, "\n");
-//	}
-//	fclose(fTest);*/
-//
-//	//threshold
-//	Ipp32f *pThreshImg = (Ipp32f*)malloc(srcRows * srcCols * sizeof(Ipp32f));
-//	ippiThreshold_32f_C1R(pSumImg, tempStep, pThreshImg, tempStep, roiSize, threshold, ippCmpGreater);
-//	FILE *fTest;
-//	fTest = fopen("pThreshImg.txt", "w");
-//	for (int i = 0; i < srcRows; i++)
-//	{
-//		for (int j = 0; j < srcCols; j++)
-//		{
-//			fprintf(fTest, "%f  ", (float)pThreshImg[j + i*srcCols]);
-//		}
-//		fprintf(fTest, "\n");
-//	}
-//	fclose(fTest);
-//
-//	free(pSumImg);
-//	return 0;
-//}
-//
-//int testC5()
-//{
-//	int imgNum = 2;
-//	char filename[100];
-//	unsigned short **queSrc = (unsigned short **)malloc(sizeof(unsigned short*) * imgNum);
-//	int srcRows, srcCols;
-//	for (int _num = 0; _num < imgNum; _num++)
-//	{
-//		sprintf(filename, "%u.tif", _num);
-//		Mat temp = imread(filename, -1);
-//
-//		queSrc[_num] = (unsigned short *)malloc(sizeof(unsigned short) * temp.rows * temp.cols);
-//		for (int i = 0; i < temp.rows; i++)
-//		{
-//			for (int j = 0; j < temp.cols; j++)
-//			{
-//				queSrc[_num][i * temp.cols + j] = temp.at<ushort>(i, j);
-//			}
-//		}
-//		srcCols = temp.cols;
-//		srcRows = temp.rows;
-//	}
-//
-//	unsigned short _threshold = 1000;
-//	float x_cen, y_cen;
-//	
-//	findCentroid(queSrc, imgNum, srcRows, srcCols, _threshold, x_cen, y_cen);
-//
-//
-//	free(queSrc);
-//	return 0;
-//}
-
-//int main()
-//{
-//	threshold_OTSU();
-//	return 0;
-//}
-
-#ifdef _DEBUG  
-#define New   new(_NORMAL_BLOCK, __FILE__, __LINE__)  
-#endif  
-
-#define CRTDBG_MAP_ALLOC    
-#include <stdlib.h>    
-#include <crtdbg.h>    
-//在入口函数中包含 _CrtDumpMemoryLeaks();    
-//即可检测到内存泄露  
-
-//以如下测试函数为例：  
-int main()
-{
-	char* pChars = New char[10];
-	_CrtDumpMemoryLeaks();
-	delete[]pChars;
-	return 0;
-}
+public:
+	CVisImage();
+	~CVisImage();
+	CVisImage(IMG_SIZE szImage, IMG_UINT init_value = 0, CHANNEL_INFO channel = VIS_IMG_GRAY, PIXEL_TYPE type = VIS_IMG_UINT8);
+	CVisImage(const CVisImage &img);
+	operator IMG_UBBUF * ();
+	operator IMG_UBBUF();
+	operator IMG_WBUF * ();
+	operator IMG_WBUF();
+	operator IMG_RBUF * ();
+	operator IMG_RBUF();
+	//CVisImage(IMG_UBBUF img);			//create by reference
+	//CVisImage(IMG_UBBUF img[3]);
+	//CVisImage(IMG_WBUF img);
+	//CVisImage(IMG_RBUF img);
+	CVisImage(const IMG_UBBUF img);
+	CVisImage(const IMG_UBBUF img[3]);
+	CVisImage(const IMG_WBUF img);
+	CVisImage(const IMG_RBUF img);
+	static void ExitWriteThread(void);
+	IMG_INT Width() { return m_Imginfo.width; }
+	IMG_INT Height() { return m_Imginfo.height; }
+	IMG_INT GetChannels() { return (IMG_INT)m_Imginfo.channel; }
+	IMG_INT GetPageNum() { return m_Imginfo.page_num; }
+	PIXEL_TYPE GetPixelType() { return m_Imginfo.pixel_type; }
+	bool IsEmpty() { return Width()*Height() == 0; }
+	bool GetImageInfo(VIS_IMAGE_INFO &imginfo);
+	bool GetImageInfo(VIS_IMAGE_INFO &imginfo) const;
+	bool SetImageInfo(VIS_IMAGE_INFO &imginfo);
+	bool GetImagePlatte_BMP(IMG_UBYTE *img_platte, IMG_UINT &size);
+	bool SetImagePlatte_BMP(IMG_UBYTE *img_platte, IMG_UINT size);
+	bool SetImage(void **ppImage);
+	bool SetImage(const void **ppImage);
+	bool SetImage(const IMG_UBBUF &img);
+	bool SetImage(const IMG_UBBUF img[3]);
+	bool SetImage(const IMG_WBUF &img);
+	bool SetImage(const IMG_RBUF &img);
+	bool InitImage(IMG_SIZE szImage, IMG_UINT init_value = 0, CHANNEL_INFO channel = VIS_IMG_GRAY, PIXEL_TYPE type = VIS_IMG_UINT8);
+	bool GetImage(const void **ppImage) const;
+	bool GetImage(const IMG_UBBUF *pubbuf) const;
+	bool GetImage(const IMG_RBUF *pubbuf) const;
+	bool GetImage(const IMG_WBUF *pubbuf) const;
+	bool GetImage(void **ppImage);
+	bool GetImage(IMG_UBBUF *pubbuf);
+	bool GetImage(IMG_WBUF *pubbuf);
+	bool GetImage(IMG_RBUF *pubbuf);
+	bool GetImageByChannel(void *&ppImage, IMG_UINT ch); //Exemple: type BMP/JPG/PNG RGB, channel 1, ch = 1; type tiff 8 bits, Page 2 , ch = 2
+	bool ReadImage(const char* filename);
+	bool WriteImage(const char *filename);
+	bool WriteImage_Syn(const char *filename);
+	bool Reset();
+	bool CopyFrom(CVisImage &srcImage);
+	bool CopyFrom(const CVisImage &srcImage);
+
+	//bool Split(void *pImage);
+	bool Merge(void *&pImage);
+	bool Add(CVisImage &srcImage);
+	bool Add_C(IMG_REAL num);
+	bool Sub(CVisImage &srcImage);
+	bool Sub_C(IMG_REAL num);
+	bool Mul(CVisImage &srcImage);
+	bool Mul_C(IMG_REAL num);
+	bool Div(CVisImage &srcImage);
+	bool Div_C(IMG_REAL num);
+	bool Abs(); // for 32 bits
+	bool Mean(IMG_LREAL& mean, IMG_INT channel = 0);
+	bool MaskMean(CVisImage &maskimg, IMG_LREAL &mean, IMG_INT channel = 0);
+	bool Sum(IMG_LREAL& sum, IMG_INT channel = 0);
+	bool Min(IMG_REAL& min, IMG_INT channel = 0);
+	bool Max(IMG_REAL& max, IMG_INT channel = 0);
+	bool Min_Index(IMG_REAL& min, IMG_INT& x, IMG_INT& y, IMG_INT channel = 0);
+	bool Max_Index(IMG_REAL& max, IMG_INT& x, IMG_INT& y, IMG_INT channel = 0);
+	bool And(CVisImage &srcImage); //byte only
+	bool Or(CVisImage &srcImage); //byte only
+	bool Xor(CVisImage &srcImage);//byte only
+	bool And_C(IMG_BYTE val); //byte only
+	bool Or_C(IMG_BYTE val); //byte only
+	bool Xor_C(IMG_BYTE val);//byte only
+	bool Not();
+	bool sqrt();
+	bool sqr();
+	bool Threshold(IMG_REAL thres, IMG_REAL thres_val, Threshold_TYPE thres_type);
+	bool Threshold_double(IMG_REAL LT, IMG_REAL LT_val, IMG_REAL GT, IMG_REAL GT_val);
+	bool Convert_8u_to_16s();
+	bool Convert_8u_to_32f();
+	bool Convert_16s_to_8u();
+	bool Convert_16s_to_32f();
+	bool Convert_32f_to_8u();
+	bool Convert_32f_to_16s();
+	bool ResizeLinear(IMG_REAL ScaleSize);
+	bool Crop(IMG_COORD start, IMG_SIZE dstsize);
+	bool FillPolygonByScanline(IMG_COORD points[], IMG_INT numPoints, void* value);
+	bool MesurementPolygonByScanline(IMG_COORD points[], IMG_INT numPoints, IMG_INT option, IMG_REAL* value);
+	bool Erosion(IMG_INT KernelSize);
+	bool Dilation(IMG_INT KernelSize);
+	bool Closing(IMG_INT Width, IMG_INT Height);
+	bool Opening(IMG_INT Width, IMG_INT Height);
+	bool Gradient(IMG_INT Width, IMG_INT Height);
+	bool Mirror(Axis axis);
+	bool RTS(IMG_RCOORD &rcoSrcCenter, IMG_RCOORD &rcoDstCenter, IMG_REAL rAngle, IMG_REAL rScale);
+	bool RTS(CVisImage &src, IMG_RCOORD &rcoSrcCenter, IMG_RCOORD &rcoDstCenter, IMG_REAL rAngle, IMG_REAL rScale);
+	bool FFT(CVisImage &fft_img);
+	bool Histogram(IMG_INT nBins, IMG_INT channel, IMG_REAL *pLevels, IMG_UINT* pHistVec);
+	bool FFT_Inv(CVisImage &Image_Inv, IMG_UINT Dst_Width, IMG_UINT Dst_Height);
+	bool SubImage(IMG_COORD start, IMG_SIZE size, CVisImage &subimage);
+	bool FilterGaussian(IMG_INT kernelSize, IMG_REAL sigma);
+	bool CenterOfMass(IMG_RCOORD& outputpoint);
+	bool Std(IMG_LREAL& std, IMG_LREAL& mean, IMG_INT channel = 0);
+	bool Brightness(IMG_REAL BrightLevel = 0);
+	bool Equalization(IMG_INT nBins);
+	bool FilterPrewittHorizBorder(IMG_INT masksize);
+	bool FilterPrewittVertBorder(IMG_INT masksize);
+	bool Contrast(IMG_REAL Threshold, IMG_REAL ContrastLevel);
+	bool FilterHiPass(IMG_INT kernelSize);
+	bool FilterLowPass(IMG_INT kernelSize);
+	bool FilterMax(IMG_INT masksize);
+	bool FilterMin(IMG_INT masksize);
+	bool FilterSobelHorizBorder(IMG_INT masksize);
+	bool FilterSobelVertBorder(IMG_INT masksize);
+	bool FilterSobelBorder(IMG_INT masksize);
+	bool FilterSobelSubpixel(IMG_INT masksize, edgeInformation *edgeArray, IMG_INT &eNum);
+	bool FilterMedian(IMG_INT masksize);
+	bool FilterMean(IMG_INT masksize);
+	bool CannyBorder(IMG_INT normsize, IMG_INT lowThresh, IMG_INT highThresh);
+	bool FilterLaplace(IMG_INT kernelSize);
+	bool FilterSharpen(IMG_INT kernelSize);
+	bool FilterBorder(IMG_WORD *pKernel, IMG_SIZE kernelSize);
+	bool Transpose();
+	bool CanvasSize(IMG_SIZE roisize, IMG_INT position = 22);
+	bool AddRandUniform(IMG_INT low, IMG_INT high, IMG_UINT pSeed);
+	bool AddRandGauss(IMG_INT mean, IMG_INT stDev, IMG_UINT pSeed);
+	bool CopyConstBorder(IMG_INT borderVal, IMG_INT borderWidth, IMG_INT borderHeight);
+	bool CopyMirrorBorder(IMG_INT borderWidth, IMG_INT borderHeight);
+	bool MaskImageMesurement(CVisImage &maskImage, Mesurement m, IMG_REAL* value);
+	bool ResizeLanczos(IMG_REAL ScaleSize);
+	bool ResizeNearest(IMG_REAL ScaleSize);
+	bool ResizeCubic(IMG_REAL ScaleSize, IMG_REAL value_B, IMG_REAL value_C);
+	bool RGBToGray();
+	bool GrayTo16Colors(CVisImage & colors_img);
+	bool Colors(IMG_INT R, IMG_INT G, IMG_INT B);
+	bool GrayToRGB();
+	bool DrawCircle(IMG_CIRCLE Circle, IMG_INT color);
+	bool DrawLine(IMG_RCOORD staPoint, IMG_RCOORD endPoint, IMG_INT color,IMG_INT lineWidth = 1);
+	bool DrawRect(IMG_WINDOW rectWin, IMG_INT color,IMG_INT lineWidth = 1);
+	bool DrawRect(IMG_RORECT rotateRect, IMG_INT color,IMG_INT lineWidth = 1);
+	bool DrawWindow(IMG_WINDOW roiWin, IMG_INT color, IMG_INT lineWidth = 1);
+	bool DrawPolygon(IMG_RCOORD *Point, IMG_INT color, IMG_INT numPoint);
+	bool DrawPoint(IMG_RCOORD *Point, IMG_INT numPoint, IMG_INT color);
+	bool DrawArrow(IMG_RCOORD start, IMG_RCOORD end, IMG_INT color);
+	bool DrawText_(const char* str, IMG_COORD leftUpCoor, IMG_INT color, int fontHeight, int fontThickness = 400, const char *fn = "Arial", bool italic = false, bool underline = false);
+	bool DrawMask(CVisImage &maskimg, IMG_INT color);
+	bool Min_Circumcircle(IMG_RCOORD *Point, IMG_INT numPoint, IMG_CIRCLE &Circle);
+	bool Min_CircumRorect(IMG_RCOORD *Point, IMG_INT numPoint, IMG_RORECT &RoRect);
+	bool ProjectVertical(IMG_VVOID *dst, IMG_INT size_dst, IMG_UWORD channel = 0);	//FOR UINT8 and WORD16, dst is LWORD, for REAL, dst is real
+	bool ProjectHorizon(IMG_VVOID *dst, IMG_INT size_dst, IMG_UWORD channel = 0);		//FOR UINT8 and WORD16, dst is LWORD, for REAL, dst is real
+	//bool Convolve_2D(CVisImage &dst, IMG_REAL *pKernelX, IMG_INT iKernelSizeX, IMG_REAL *pKernelY, IMG_INT iKernelSizeY);
+
+	bool SetTiffInformation(VIS_TIFF_INFOMATION *tifinfo);
+	VIS_TIFF_INFOMATION * GetTiffInformation(void) { return m_pTiffInfo; }
+private:
+	bool GrayToRGB(CVisImage &colors_img);
+	IMG_INT Type(const char* file);
+	void ExtractRGB(IMG_UBYTE* pointer, size_t size);
+	void WriteData(const int channel);
+	bool SetSubImage(void **ppImamge, IMG_UINT sub_start_x, IMG_UINT sub_start_y);
+	bool CanvasSizeTemp(IMG_INT srcStep, IMG_INT dstStep, IMG_INT channel, IMG_UBYTE *&pCopyVec, IMG_SIZE roisize, IMG_SIZE StrPoint);
+	bool getIntraClassVariance(IMG_UWORD* src, IMG_INT srcRows, IMG_INT srcCols, IMG_INT &varTh, IMG_REAL &varian);
+
+private:
+	IMG_UBYTE *m_arrPalette;
+	IMG_INT m_paletteSize = 0;
+	IMG_INT m_imageType;
+	IMG_BOOL m_bInternalMalloc;
+	VIS_IMAGE_INFO m_Imginfo;
+	char *m_FileName;
+	void **m_arrChannel;
+	VIS_TIFF_INFOMATION *m_pTiffInfo;
+	unsigned char * p_images;
+	bool m_isSubImage = false;
+public:
+	// // free and reset the image class
+	void Free();
+	void LightCorrectWithRefImage(CVisImage * pRefImage);
+	void GenerateLightReferenceImage(void);
+};
