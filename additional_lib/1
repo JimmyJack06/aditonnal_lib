@@ -6136,8 +6136,8 @@ void CVisAlignResult::SortByPosition(POS_SORT_METHOD method)
 			return trans_y_f(obj1) < trans_y_f(obj2);
 		});
 
-		IMG_REAL *y_diff = (IMG_REAL *)malloc(sizeof(IMG_REAL)*m_result->size);
-		IMG_REAL *y_diff2 = (IMG_REAL *)malloc(sizeof(IMG_REAL)*m_result->size);
+		IMG_REAL *y_diff = (IMG_REAL *)pool.Malloc(sizeof(IMG_REAL)*m_result->size);
+		IMG_REAL *y_diff2 = (IMG_REAL *)pool.Malloc(sizeof(IMG_REAL)*m_result->size);
 		VALIDATE_MALLOC(y_diff);
 		VALIDATE_MALLOC(y_diff2);
 		for (size_t i = 0; i < m_result->size - 1; i++) {
@@ -6157,6 +6157,13 @@ void CVisAlignResult::SortByPosition(POS_SORT_METHOD method)
 		});
 		y_diff2[m_result->size - 1] = y_diff[0];
 		IMG_REAL threshold = (y_diff[0] + y_diff[m_result->size >> 1]) / 4.0f;
+
+		vector<IMG_REAL> vecY, vecY2;
+		for (size_t i = 0; i < m_result->size; i++)
+		{
+			vecY.push_back(y_diff[i]);
+			vecY2.push_back(y_diff2[i]);
+		}
 
 		for (size_t i = 0, j = 0; i < m_result->size; i++)
 		{
