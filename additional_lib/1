@@ -6173,7 +6173,7 @@ void CVisAlignResult::SortByPosition(POS_SORT_METHOD method)
 		//针对只有一行的工件特殊处理
 		bool doXSort = true;
 		IMG_REAL yDiff_mean = 0, yDiff_stddev = 0;
-		sts = ippsMeanStdDev_32f(y_diff, m_result->size - 1, &yDiff_mean, &yDiff_stddev, IppHintAlgorithm::ippAlgHintAccurate);
+		sts = ippsMeanStdDev_32f(y_diff2, m_result->size - 1, &yDiff_mean, &yDiff_stddev, IppHintAlgorithm::ippAlgHintAccurate);
 		FILE *fp = fopen("zmzmjj.txt", "at");
 		if (fp)
 		{
@@ -6181,9 +6181,9 @@ void CVisAlignResult::SortByPosition(POS_SORT_METHOD method)
 		}
 
 		for (int i = 0; i < m_result->size - 1; ++i) {
-			fprintf(fp, "%f \n", y_diff[i]);
+			fprintf(fp, "%f \n", y_diff2[i]);
 
-			if (fabs(y_diff[i] - yDiff_mean) > yDiff_stddev)
+			if (fabs(y_diff2[i] - yDiff_mean) > yDiff_stddev)
 			{
 				doXSort = false;
 			}
