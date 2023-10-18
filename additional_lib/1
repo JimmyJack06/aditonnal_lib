@@ -6185,20 +6185,21 @@ void CVisAlignResult::SortByPosition(POS_SORT_METHOD method)
 		}
 
 		bool doXSort = true;
-		IMG_REAL y_mean = 0, y_stddev = 0;
-		sts = ippsMeanStdDev_32f(y_pos, m_result->size, &y_mean, &y_stddev, IppHintAlgorithm::ippAlgHintAccurate);
+		IMG_REAL y_mid = y_pos[m_result->size / 2];
 		FILE *fp = fopen("zmzmjj.txt", "at");
 		if (fp)
 		{
-			fprintf(fp, "%f %f %f %f\n", y_mean, y_stddev, objWidth, objHeight);
+			fprintf(fp, "%f %f %f\n", y_mid, objWidth / 2, objHeight / 2);
 		}
 
-		if (y_stddev > objWidth / 2 || y_stddev > objHeight / 2)
-		{
-			doXSort = false;
-		}
 		for (int i = 0; i < m_result->size; ++i) {
 			fprintf(fp, "%f \n", y_pos[i]);
+			if (fabs(y_pos[i] - y_mid) > objWidth / 2 || fabs(y_pos[i] - y_mid) > objHeight / 2)
+			{
+				doXSort = false;
+				break;
+			}
+
 		}
 		fclose(fp);
 		if (doXSort)
