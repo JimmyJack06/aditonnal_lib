@@ -6175,7 +6175,7 @@ void CVisAlignResult::SortByPosition(POS_SORT_METHOD method)
 		IMG_REAL yDiff_mean = 0, yDiff_stddev = 0;
 		sts = ippsMeanStdDev_32f(y_diff, m_result->size - 1, &yDiff_mean, &yDiff_stddev, IppHintAlgorithm::ippAlgHintAccurate);
 		for (int i = 0; i < m_result->size - 1; ++i) {
-			if (fabs(y_diff[i] - yDiff_mean) > yDiff_stddev)
+			if (fabs(y_diff[i] - yDiff_mean) > 3 * yDiff_stddev)
 			{
 				doXSort = false;
 				break;
