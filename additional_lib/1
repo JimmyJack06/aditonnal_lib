@@ -6176,7 +6176,7 @@ void CVisAlignResult::SortByPosition(POS_SORT_METHOD method)
 		});
 		x_diff2[m_result->size - 1] = x_diff[0];
 
-		IMG_REAL y0 = y_diff[0], y2 = y_diff[1], y2 = y_diff[2];
+		IMG_REAL y0 = y_diff[0], y1 = y_diff[1], y2 = y_diff[2];
 		IMG_REAL y20 = y_diff2[0], y21 = y_diff2[1], y22 = y_diff2[2];
 
 
