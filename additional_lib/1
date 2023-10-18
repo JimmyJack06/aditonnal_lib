@@ -6189,9 +6189,10 @@ void CVisAlignResult::SortByPosition(POS_SORT_METHOD method)
 		for (int i = 0; i < m_result->size; ++i) {
 			fprintf(fp, "%f \n", y_pos[i]);
 
-			if (fabs(y_pos[i] - y_mean) > y_stddev)
+			if (fabs(y_pos[i] - y_mean) > 2 * y_stddev)
 			{
 				doXSort = false;
+				break;
 			}
 		}
 		fclose(fp);
