@@ -6171,19 +6171,25 @@ void CVisAlignResult::SortByPosition(POS_SORT_METHOD method)
 
 
 		//针对只有一行的工件特殊处理
+		IMG_REAL *y_pos = (IMG_REAL *)pool.Malloc(sizeof(IMG_REAL)*m_result->size);
+		for (int i = 0; i < m_result->size; ++i)
+		{
+			y_pos[i] = trans_y_f(m_result->ptr[i]);
+		}
+
 		bool doXSort = true;
-		IMG_REAL yDiff_mean = 0, yDiff_stddev = 0;
-		sts = ippsMeanStdDev_32f(y_diff2, m_result->size - 1, &yDiff_mean, &yDiff_stddev, IppHintAlgorithm::ippAlgHintAccurate);
+		IMG_REAL y_mean = 0, y_stddev = 0;
+		sts = ippsMeanStdDev_32f(y_pos, m_result->size, &y_mean, &y_stddev, IppHintAlgorithm::ippAlgHintAccurate);
 		FILE *fp = fopen("zmzmjj.txt", "at");
 		if (fp)
 		{
-			fprintf(fp, "%f %f \n", yDiff_mean,yDiff_stddev);
+			fprintf(fp, "%f %f \n", y_mean, y_stddev);
 		}
 
-		for (int i = 0; i < m_result->size - 1; ++i) {
-			fprintf(fp, "%f \n", y_diff2[i]);
+		for (int i = 0; i < m_result->size; ++i) {
+			fprintf(fp, "%f \n", y_pos[i]);
 
-			if (fabs(y_diff2[i] - yDiff_mean) > yDiff_stddev)
+			if (fabs(y_pos[i] - y_mean) > y_stddev)
 			{
 				doXSort = false;
 			}
