@@ -144,11 +144,11 @@ IMG_LREAL CVisAlignSearch::FeatEdgeTangentDistance(IMG_LRCOORD *edge, IMG_LRCOOR
 //{
 //	m_LearnOption.LearnInput(stOption);
 //#ifdef DEBUG
-//	m_LearnOption.learnInput.wPreprocKernelSize = 3;		//��˹��
-//	m_LearnOption.learnInput.ulPreprocParam = 3;		//��˹sigma
+//	m_LearnOption.learnInput.wPreprocKernelSize = 3;		//高斯核
+//	m_LearnOption.learnInput.ulPreprocParam = 3;		//高斯sigma
 //
-//	m_LearnOption.learnInput.ulReduction = 2;		//0,1,2����
-//	m_LearnOption.learnInput.ulHighestLayer = 0;	//�ӵ�0�㿪ʼ
+//	m_LearnOption.learnInput.ulReduction = 2;		//0,1,2三层
+//	m_LearnOption.learnInput.ulHighestLayer = 0;	//从第0层开始
 //
 //	m_LearnOption.learnInput.ulEdgeThreshold = 100;	//edge threshold
 //#endif // DEBUG
@@ -162,7 +162,7 @@ IMG_LREAL CVisAlignSearch::FeatEdgeTangentDistance(IMG_LRCOORD *edge, IMG_LRCOOR
 */
 IMG_VVOID CVisAlignSearch::__GetGaussianKernel_dim1(IMG_WORD *&gaus, const IMG_INT size, const double sigma)
 {
-	const double PII = 4.0*atan(1.0); //Բ���ʦи�ֵ  
+	const double PII = 4.0*atan(1.0); //圆周率π赋值  
 	IMG_INT center = size / 2;
 	IMG_LREAL sum = 0;
 	for (IMG_INT i = 0; i < size; i++)
@@ -184,7 +184,7 @@ IMG_VVOID CVisAlignSearch::__GetGaussianKernel_dim1(IMG_WORD *&gaus, const IMG_I
 */
 IMG_VVOID CVisAlignSearch::__GetGaussianKernel_dim2(IMG_LREAL **gaus, const IMG_INT size, const double sigma)
 {
-	const double PIII = 4.0*atan(1.0); //Բ���ʦи�ֵ  
+	const double PIII = 4.0*atan(1.0); //圆周率π赋值  
 	IMG_INT center = size / 2;
 	IMG_LREAL sum = 0;
 	for (IMG_INT i = 0; i < size; i++)
@@ -301,7 +301,7 @@ IMG_INT CVisAlignSearch::preprocess(CVisAlignSearchInterData &stAlignExData)
 //				printf("%d,", kernel[i*kernel_size + j]);
 //			}
 //		}*/
-//		IMG_INT divisor = 32767;//��һ��
+//		IMG_INT divisor = 32767;//归一化
 //		IMG_UBYTE *pBuffer = NULL;                /* Pointer to the work buffer */
 //		IppiFilterBorderSpec* pSpec = NULL;   /* context structure */
 //		IMG_INT iTmpBufSize = 0, iSpecSize = 0;   /* Common work buffer kernel_size */
@@ -576,7 +576,7 @@ IMG_INT CVisAlignSearch::edgeExtract_dstRoi(CVisAlignSearchInterData &stAlignExD
 	IMG_UBBUF dstRoiE = stAlignExData.EdDstRoiE();
 	IMG_RBUF angAll = stAlignExData.EdAngle();
 	EDGE_INFORMATION *edgeArray = stAlignExData.pEdgeArray();
-	IMG_UINT k = stAlignExData.EdgeNum();//��¼��Ե��ĸ���
+	IMG_UINT k = stAlignExData.EdgeNum();//记录边缘点的个数
 	CVisAlignRecordTable *pstTable = nullptr;
 	VIS_ALIGN_RECORD *pstRecord = m_AlignRecord->GetRecord();
 	IMG_LWORD lwVoteLevel = m_SearchOption.GetSearchPara()->ubRedFactor;
@@ -795,7 +795,7 @@ IMG_VVOID CVisAlignSearch::SetRecord(CVisAlignRecord *pstRec)
 * @param cur_level current pyramid level of backmatch \n
 * @param Other-Params Please reference to related vars in CVisAlignSearchInterData
 * \n
-* @return num_matchedPoints,ƥ�䵽�ĵ���.
+* @return num_matchedPoints,匹配到的点数.
 */
 IMG_INT CVisAlignSearch::back_match(CVisAlignSearchInterData &stAlignExData)
 {
@@ -1796,12 +1796,12 @@ IMG_INT CVisAlignSearch::iterationfit_RTS(CVisAlignSearchInterData &stAlignExDat
 				_snprintf(value[5], sizeof(value[5]), "%.3f", pstObj->rLikeScore);
 				_snprintf(value[6], sizeof(value[6]), "%.3f", pstObj->rMSE);
 				HL_CreateTableRow(m_pHtmlLog, &stTable, value[0], value[1], value[2], value[3], value[4], value[5], value[6]);
-				//writeLog("x = %f, y = %f, rotation = %f, scale = %f, fitscore[%d] = %f�� mse[%d] = %f\n", 
+				//writeLog("x = %f, y = %f, rotation = %f, scale = %f, fitscore[%d] = %f， mse[%d] = %f\n", 
 				//	pstObj->rco.x, pstObj->rco.y, pstObj->rotation, pstObj->scale, iter_t, fitscore, iter_t, nowsum);
 			}
 
 			iter_t++;
-			//cout << "��������" << iter_t << endl;
+			//cout << "迭代次数" << iter_t << endl;
 			//cout << "sum:" << nowsum << "  ..." << lastsum << endl;
 			pool.Pop();
 		} while (abs(nowsum - lastsum) > 0.02 && iter_t <20);
@@ -2324,12 +2324,12 @@ IMG_INT CVisAlignSearch::iterationfit_fixangle(CVisAlignSearchInterData &stAlign
 				_snprintf(value[5], sizeof(value[5]), "%.3f", pstObj->rLikeScore);
 				_snprintf(value[6], sizeof(value[6]), "%.3f", pstObj->rMSE);
 				HL_CreateTableRow(m_pHtmlLog, &stTable, value[0], value[1], value[2], value[3], value[4], value[5], value[6]);
-				//writeLog("x = %f, y = %f, rotation = %f, scale = %f, fitscore[%d] = %f�� mse[%d] = %f\n",
+				//writeLog("x = %f, y = %f, rotation = %f, scale = %f, fitscore[%d] = %f， mse[%d] = %f\n",
 				//	pstObj->rco.x, pstObj->rco.y, pstObj->rotation, pstObj->scale, iter_t, fitscore, iter_t, nowsum);
 			}
 
 			iter_t++;
-			//cout << "��������" << iter_t << endl;
+			//cout << "迭代次数" << iter_t << endl;
 			//cout << "sum:" << nowsum << "  ..." << lastsum << endl;
 			pool.Pop();
 		} while (abs(nowsum - lastsum) > 0.02 && iter_t <20);
@@ -2963,12 +2963,12 @@ IMG_INT CVisAlignSearch::iterationfit_fixscale(CVisAlignSearchInterData &stAlign
 				_snprintf(value[5], sizeof(value[5]), "%.3f", pstObj->rLikeScore);
 				_snprintf(value[6], sizeof(value[6]), "%.3f", pstObj->rMSE);
 				HL_CreateTableRow(m_pHtmlLog, &stTable, value[0], value[1], value[2], value[3], value[4], value[5], value[6]);
-				//writeLog("x = %f, y = %f, rotation = %f, scale = %f, fitscore[%d] = %f�� mse[%d] = %f\n",
+				//writeLog("x = %f, y = %f, rotation = %f, scale = %f, fitscore[%d] = %f， mse[%d] = %f\n",
 				//	pstObj->rco.x, pstObj->rco.y, pstObj->rotation, pstObj->scale, iter_t, fitscore, iter_t, nowsum);
 			}
 
 			iter_t++;
-			//cout << "��������" << iter_t << endl;
+			//cout << "迭代次数" << iter_t << endl;
 			//cout << "sum:" << nowsum << "  ..." << lastsum << endl;
 			pool.Pop();
 		} while (abs(nowsum - lastsum) > 0.02 && iter_t <20);
@@ -3492,12 +3492,12 @@ IMG_INT CVisAlignSearch::iterationfit_fixanglescale(CVisAlignSearchInterData &st
 				_snprintf(value[5], sizeof(value[5]), "%.3f", pstObj->rLikeScore);
 				_snprintf(value[6], sizeof(value[6]), "%.3f", pstObj->rMSE);
 				HL_CreateTableRow(m_pHtmlLog, &stTable, value[0], value[1], value[2], value[3], value[4], value[5], value[6]);
-				//writeLog("x = %f, y = %f, rotation = %f, scale = %f, fitscore[%d] = %f�� mse[%d] = %f\n",
+				//writeLog("x = %f, y = %f, rotation = %f, scale = %f, fitscore[%d] = %f， mse[%d] = %f\n",
 				//	pstObj->rco.x, pstObj->rco.y, pstObj->rotation, pstObj->scale, iter_t, fitscore, iter_t, nowsum);
 			}
 
 			iter_t++;
-			//cout << "��������" << iter_t << endl;
+			//cout << "迭代次数" << iter_t << endl;
 			//cout << "sum:" << nowsum << "  ..." << lastsum << endl;
 			pool.Pop();
 		} while (abs(nowsum - lastsum) > 0.02 && iter_t <20);
@@ -5860,7 +5860,7 @@ IMG_VVOID CVisAlignSearchInterData::edgeDetectInit(int _botLev)
 IMG_VVOID CVisAlignSearchInterData::backMatchInit(CVisAlignRecordTable *pTable,int _level, IMG_OBJ *pstObj, CVisMemPool &pool)
 {
 	
-	num_template = (pTable)->uwNumOfSpAFeature;//��������Ŀ	
+	num_template = (pTable)->uwNumOfSpAFeature;//特征点数目	
 	backmatch_info.backmatch_pairs = (BACK_MATCH_PAIR *)pool.Malloc(sizeof(BACK_MATCH_PAIR)*num_template);
 	backmatch_info.matched_edge_num = 0;
 	backmatch_info.matched_pair_num = num_template;
@@ -6156,30 +6156,6 @@ void CVisAlignResult::SortByPosition(POS_SORT_METHOD method)
 				return 1;
 		});
 		y_diff2[m_result->size - 1] = y_diff[0];
-
-		IMG_REAL *x_diff = (IMG_REAL *)pool.Malloc(sizeof(IMG_REAL)*m_result->size);
-		IMG_REAL *x_diff2 = (IMG_REAL *)pool.Malloc(sizeof(IMG_REAL)*m_result->size);
-		VALIDATE_MALLOC(x_diff);
-		VALIDATE_MALLOC(x_diff2);
-		for (size_t i = 0; i < m_result->size - 1; i++) {
-			x_diff[i] = trans_x_f(m_result->ptr[i + 1]) - trans_x_f(m_result->ptr[i]);
-		}
-		memcpy(x_diff2, x_diff, sizeof(IMG_REAL)*m_result->size);
-		qsort(x_diff, m_result->size - 1, sizeof(IMG_REAL), [](void const *p1, void const *p2)->int
-		{
-			//descend y difference
-			IMG_REAL const *obj1 = static_cast<const IMG_REAL *>(p1), *obj2 = static_cast<IMG_REAL const *>(p2);
-			if (*obj1 > *obj2)
-				return -1;
-			else
-				return 1;
-		});
-		x_diff2[m_result->size - 1] = x_diff[0];
-
-		IMG_REAL y0 = y_diff[0], y1 = y_diff[1], y2 = y_diff[2];
-		IMG_REAL y20 = y_diff2[0], y21 = y_diff2[1], y22 = y_diff2[2];
-
-
 		IMG_REAL threshold = (y_diff[0] + y_diff[m_result->size >> 1]) / 4.0f;
 
 		for (size_t i = 0, j = 0; i < m_result->size; i++)
@@ -6191,6 +6167,23 @@ void CVisAlignResult::SortByPosition(POS_SORT_METHOD method)
 				});
 				j = i + 1;
 			}
+		}
+
+
+		//针对只有一行的工件特殊处理
+		bool doXSort = true;
+		IMG_REAL yDiff_mean = 0, yDiff_stddev = 0;
+		sts = ippsMeanStdDev_32f(y_diff, m_result->size - 1, &yDiff_mean, &yDiff_stddev, IppHintAlgorithm::ippAlgHintAccurate);
+		for (int i = 0; i < m_result->size - 1; ++i) {
+			if (fabs(y_diff[i] - yDiff_mean) > yDiff_stddev)
+			{
+				doXSort = false;
+				break;
+			}
+		}
+		if (doXSort)
+		{
+			SortByPosition(SORT_X);
 		}
 
 		break;
