@@ -6186,14 +6186,14 @@ void CVisAlignResult::SortByPosition(POS_SORT_METHOD method)
 
 		bool doXSort = true;
 		IMG_REAL y_mid = y_pos[m_result->size / 2];
-		FILE *fp = fopen("zmzmjj.txt", "at");
+		/*FILE *fp = fopen("zmzmjj.txt", "at");
 		if (fp)
 		{
 			fprintf(fp, "%f %f %f\n", y_mid, objWidth / 2, objHeight / 2);
-		}
+		}*/
 
 		for (int i = 0; i < m_result->size; ++i) {
-			fprintf(fp, "%f \n", y_pos[i]);
+			//fprintf(fp, "%f \n", y_pos[i]);
 			if (fabs(y_pos[i] - y_mid) > objWidth / 2 || fabs(y_pos[i] - y_mid) > objHeight / 2)
 			{
 				doXSort = false;
@@ -6201,7 +6201,7 @@ void CVisAlignResult::SortByPosition(POS_SORT_METHOD method)
 			}
 
 		}
-		fclose(fp);
+		//fclose(fp);
 		if (doXSort)
 		{
 			SortByPosition(SORT_X);
