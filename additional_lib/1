@@ -6044,6 +6044,36 @@ void CVisAlignResult::SortByPosition(POS_SORT_METHOD method)
 				j = i+1;
 			}
 		}
+
+		//针对只有一行的工件特殊处理
+		auto distanceP2P = [&](const IMG_RCOORD& p1, const IMG_RCOORD& p2) {
+			return sqrt((p2.x - p1.x)*(p2.x - p1.x) + (p2.y - p1.y)*(p2.y - p1.y));
+		};
+
+		IMG_REAL objWidth = distanceP2P(m_result->ptr->arcoROICorner[0], m_result->ptr->arcoROICorner[1]);
+		IMG_REAL objHeight = distanceP2P(m_result->ptr->arcoROICorner[1], m_result->ptr->arcoROICorner[2]);
+
+		IMG_REAL *y_pos = (IMG_REAL *)pool.Malloc(sizeof(IMG_REAL)*m_result->size);
+		for (int i = 0; i < m_result->size; ++i)
+		{
+			y_pos[i] = m_result->ptr[i].rco.y;
+		}
+
+		bool doXSort = true;
+		IMG_REAL y_mid = y_pos[m_result->size / 2];
+		for (int i = 0; i < m_result->size; ++i) {
+			if (fabs(y_pos[i] - y_mid) > objWidth / 2 || fabs(y_pos[i] - y_mid) > objHeight / 2)
+			{
+				doXSort = false;
+				break;
+			}
+
+		}
+		if (doXSort)
+		{
+			SortByPosition(SORT_X);
+		}
+
 		break;
 
 	}
@@ -6094,6 +6124,38 @@ void CVisAlignResult::SortByPosition(POS_SORT_METHOD method)
 				j = i+1;
 			}
 		}
+
+		//针对只有一行的工件特殊处理
+		auto distanceP2P = [&](const IMG_RCOORD& p1, const IMG_RCOORD& p2) {
+			return sqrt((p2.x - p1.x)*(p2.x - p1.x) + (p2.y - p1.y)*(p2.y - p1.y));
+		};
+
+		IMG_REAL objWidth = distanceP2P(m_result->ptr->arcoROICorner[0], m_result->ptr->arcoROICorner[1]);
+		IMG_REAL objHeight = distanceP2P(m_result->ptr->arcoROICorner[1], m_result->ptr->arcoROICorner[2]);
+
+		IMG_REAL *x_pos = (IMG_REAL *)pool.Malloc(sizeof(IMG_REAL)*m_result->size);
+		for (int i = 0; i < m_result->size; ++i)
+		{
+			x_pos[i] = m_result->ptr[i].rco.x;
+		}
+
+		bool doYSort = true;
+		IMG_REAL x_mid = x_pos[m_result->size / 2];
+		for (int i = 0; i < m_result->size; ++i) {
+			if (fabs(x_pos[i] - x_mid) > objWidth / 2 || fabs(x_pos[i] - x_mid) > objHeight / 2)
+			{
+				doYSort = false;
+				break;
+			}
+
+		}
+		//fclose(fp);
+		if (doYSort)
+		{
+			SortByPosition(SORT_Y);
+		}
+
+
 		break;
 
 	}
