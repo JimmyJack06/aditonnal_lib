@@ -1,368 +1,2991 @@
-#pragma once
-#include <ViType.h>
-#include <memory.h>
+#include <VisEdge.h>
+#include <base.h>
+#include <vector>
+#include <ipp.h>
+#include <mkl.h>
+#include <VisMEM.h>
+#include <VisImage.h>
+#include <VisAlign.h>
+#include <VisAlignHtmlLog.h>
+#include "VisAlignGeneral.h"
+#include <io.h>
+#include <direct.h>
 
-#ifdef  DLL_EXPORTS
-#define DLLEXPORT __declspec(dllexport)
-#else
-#define DLLEXPORT __declspec(dllimport)   
-#endif
-
-#define MAX_FILE_NAME (2560)
-#define MAX_CHANNEL_NUM (100)
-#define PLATTE_SIZE (1024)
-#define JPG_SIZE_LIMITATION (65000)
-
-enum IMAGE_TYPE
+//#define VIS_ERR_INVALID_ARG		(-1)
+//#define MEM_ERR_MALLOC			(-2)
+//#define ALIGN_ERR_NO_OBJECT_FOUND (-4)
+//#define ALIGN_ERR_INVALID_ARG	(-5)
+//#define ALIGN_ERR_HS_NEIGH_SUM	(-6)
+//#define VIS_ERR_OUT_ROI			(-7)
+//#define VIS_ERR_INVALID_SIZE	(-8)
+//#define VIS_ERR_OVERFLOW		(-9)
+//#define VIS_ERR_NULLPTR			(-10)
+//#define VIS_ERR_FAIL_IN_MKL		(-11)
+//#define	VIS_ERR_FAIL_IN_IPPI	(-12)
+//#define VIS_ERR_HEAP_DAMAGE		(-13)
+//#define VIS_ERR_OPEN_FILE		(-14)
+//#define VIS_ERR_LEARN_FAIL		(-15)
+//#define VIS_ERR_MATH_ERR		(-16)
+extern std::timed_mutex g_logIndexLock;
+thread_local IMG_ULWORD g_EdgeLogIndex = 0;
+IMG_ULWORD g_MasterEdgeLogIndex;
+CVisEdge::CVisEdge()
 {
-	BMP_TYPE = 0,
-	TIFF_TYPE = 1,
-	JPG_TYPE = 2,
-	PNG_TYPE = 3,
-	UNKNOWN_TYPE = 4
-};
+	m_Img.ptr = nullptr;
+	m_Mask.ptr = nullptr;
+	m_Img.size = { 0,0 };
+	m_Img.linestep = 0;
+	m_Mask.size = { 0,0 };
+	m_Mask.linestep = 0;
+	m_lineStart = { 0.0,0.0 };
+	m_lineEnd = { 0.0,0.0 };
+	m_normalVari = 0.0;
+	m_iGradKernal = 3;
+	m_gradMethod = GradMethod::EDGE_QUADRATIC;
+	m_dGaussSigmaWidth = 0.0;
+	m_dGaussSigmaHeight = 0.0;
+	m_dGaussKerWidth = 0;
+	m_dGaussKerHeight =0;
+	m_edgeDir = EDGETYPE::ANY;
+	m_edgeSelect = EdgePriorSelect::ALL;
+	m_gradLevel = GRADLEVEL_EDGE::DARK;
+	m_EdgePts = nullptr;
+	m_Angle = nullptr;
+	m_Magnitude = nullptr;
+	m_ptNums = 0;
+	m_fOffset = 0.f;
+	m_uwDebug = 0;
+	m_strDebugPath[0] = 0;
+	m_pHtmlLog = nullptr;
+	m_iOption = FindEdgeOption::OPTION_NONE;
+	m_MaxBlackWhiteCenterWidth = m_MinBlackWhiteCenterWidth = -1;
+	memset(&m_ROI, 0, sizeof(m_ROI));
+	m_useROI = true;
+}
 
-enum PIXEL_TYPE
+CVisEdge::~CVisEdge()
 {
-	VIS_IMG_UINT8,
-	VIS_IMG_SHORT16,
-	VIS_IMG_REAL, //32f
-};
-
-enum CHANNEL_INFO
-{
-	VIS_IMG_GRAY = 1,
-	VIS_IMG_RGB = 3,
-	VIS_IMG_ARGB = 4
-};
-
-enum Threshold_TYPE
-{
-	CmpLess = 0,
-	CmpLessEq = 1,
-	CmpEq = 2,
-	CmpGreaterEq = 3,
-	CmpGreater = 4
-};
-
-enum Axis {
-	AxsHorizontal = 0,
-	AxsVertical = 1,
-	AxsBoth = 2,
-	Axs45 = 3,
-	Axs135 = 4
-};
-
-enum Mesurement {
-	MesureSum = 0, // IMG_REAL m = MesureSum
-	MesureMean = 1,// IMG_REAL m = MesureMean
-	MesureStd = 2,// IMG_REAL m = MesureStd
-	MesureArea = 3,	// IMG_REAL m = MesureArea
-	MesureMin = 4, // IMG_REAL m[3] = {min_value, position_x, position_y}
-	MesureMax = 5, // IMG_REAL m[3] = {max_value, position_x, position_y}
-	MesureCentroid = 6, // IMG_REAL m[3] = {centermass_value, position_x, position_y}
-	MesureCenterpoint = 7,  // IMG_REAL m[3] = {center_value, position_x, position_y}
-	MesureAll = 8   // IMG_REAL m[16] = {MesureSum, MesureMean, MesureStd, MesureArea, min_value, position_x, position_y, max_value, position_x, position_y, 
-					//centermass_value, position_x, position_y,  center_value, position_x, position_y}
-};
-
-
-enum POSITION {
-
-	TOP_LEFT = 11,
-	TOP_CENTER = 12,
-	TOP_RIGHT = 13,
-	CENTER_LEFT = 21,
-	CENTER = 22,
-	CENTER_RIGHT = 23,
-	BOTTOM_LEFT = 31,
-	BOTTOM_CENTER = 32,
-	BOTTOM_RIGHT = 33
-};
-
-enum COLORS {
-	Black = 0,			//0,0,0
-	White = 1,			//255,255,255
-	Red = 2,				//255,0,0
-	Green = 3,			//0,255,0
-	Blue = 4,				//0,0,255
-	Cyan = 5,			//0,255,255
-	Fuchsia = 6,		//255,0,255
-	Yellow = 7,			//255,255,0
-};
-
-struct DLLEXPORT VIS_IMAGE_INFO
-{
-	IMG_INT width;
-	IMG_INT height;
-	IMG_INT byte_per_pixel;
-	IMG_INT page_num;
-	CHANNEL_INFO channel;
-	IMG_INT palette_size = 0;
-	IMG_INT sample_per_pixel;
-	enum PIXEL_TYPE pixel_type;		//necessary, pixel type, self explain
-	enum IMAGE_TYPE img_type;		//necessary, state image channel, self explain
-	IMG_INT linestep;
-
-	void clear()
+	if (m_EdgePts)
 	{
-		memset(this, 0x00, sizeof(VIS_IMAGE_INFO));
+		delete[]m_EdgePts;
+		m_EdgePts = nullptr;
 	}
-
-	VIS_IMAGE_INFO& operator=(const VIS_IMAGE_INFO& o) // rewrite operator=
+	if (m_Magnitude)
 	{
-		width = o.width;
-		height = o.height;
-		byte_per_pixel = o.byte_per_pixel;
-		page_num = o.page_num;
-		channel = o.channel;
-		palette_size = o.palette_size;
-		pixel_type = o.pixel_type;
-		img_type = o.img_type;
-		sample_per_pixel = o.sample_per_pixel;
-		linestep = o.linestep;
-		return *this;
+		delete m_Magnitude;
+		m_Magnitude = nullptr;
 	}
-
-	bool operator!=(const VIS_IMAGE_INFO& o) // rewrite operator!=
+	if (m_Angle)
 	{
-		bool state = true;
-		if (width == o.width && height == o.height && byte_per_pixel == o.byte_per_pixel
-			&& page_num == o.page_num && channel == o.channel
-			&& palette_size == o.palette_size && pixel_type == o.pixel_type
-			&& sample_per_pixel == o.sample_per_pixel && linestep == o.linestep)
+		delete m_Angle;
+		m_Angle = nullptr;
+	}
+}
+IMG_VVOID CVisEdge::SetDebug(const IMG_WORD debugflag, const IMG_CHAR *debugpath)
+{
+	strncpy(m_strDebugPath, debugpath, sizeof(m_strDebugPath));
+	m_uwDebug = debugflag;
+}
+void CVisEdge::logInit(char *filename)
+{
+	m_pHtmlLog = (HTMLLOGGING *)CVisMemPool::PMalloc(sizeof(HTMLLOGGING));
+	VALIDATE_MALLOC(m_pHtmlLog);
+	if (m_pHtmlLog == nullptr)return;
+	HL_Create(filename, "Bomming Line Search Log", m_pHtmlLog);
+}
+void CVisEdge::logfinish(void)
+{
+	HL_Close(m_pHtmlLog);
+	if (m_pHtmlLog == nullptr)return;
+	CVisMemPool::PFree(m_pHtmlLog);
+}
+void CVisEdge::writeLog(char *msg, ...)
+{
+	if (m_pHtmlLog == nullptr)return;
+
+	va_list argp;
+	va_start(argp, msg);
+	IMG_CHAR  buf[512];
+	vsprintf((char *)buf, (char *)msg, argp);
+	HL_PutLine(m_pHtmlLog, buf);
+	va_end(argp);
+}
+void CVisEdge::SaveOptionToHTMLLog(struct _HTMLLOGGING *pstLog)
+{
+	if (pstLog == nullptr)return;
+	IMG_CHAR value[1000];
+	IMG_CHAR *heading[2] = { "Key", "Value" };
+	HTMLLOGGING_TABLE_DATA stTable;
+	HL_InitTableData(&stTable);
+	stTable.title = "Edge extract option";
+	stTable.tablelinewidth = 0;
+	stTable.column = 2;
+	stTable.fontweight = FW_Medium;
+	stTable.tablealign = TX_CENTER;
+	stTable.tablewidth = 50;
+	stTable.tablelinewidth = 1;
+	stTable.bgColorOddLine = 0xbfffbf;
+	stTable.formatstring = "%.6f";
+	stTable.datatype = DT_REAL;
+	stTable.heading = heading;
+	HL_CreateTableHeader(pstLog, &stTable);
+
+	_snprintf(value, sizeof(value), "%d", m_uwDebug);
+	HL_CreateTableRow(pstLog, &stTable, "uwDebug(0/1/5/512)", value);
+	_snprintf(value, sizeof(value), "[ %.3f %.3f ] - [ %.3f %.3f ]", m_lineStart.x, m_lineStart.y, m_lineEnd.x, m_lineEnd.y);
+	HL_CreateTableRow(pstLog, &stTable, "EdgeROI:StartPt-EndPt", value);
+	_snprintf(value, sizeof(value), "[ %d %d ] - [ %d %d ]", m_ROI.coWindowOff.x, m_ROI.coWindowOff.y, m_ROI.szWindowSize.width, m_ROI.szWindowSize.height);
+	HL_CreateTableRow(pstLog, &stTable, "ImageROI:StartPt-EndPt", value);
+	_snprintf(value, sizeof(value), "%.3f", m_normalVari);
+	HL_CreateTableRow(pstLog, &stTable, "m_normalVari", value);
+	_snprintf(value, sizeof(value), "%d", m_iGradKernal);
+	HL_CreateTableRow(pstLog, &stTable, "m_iGradKernal", value);
+	_snprintf(value, sizeof(value), "%d", m_fOffset);
+	HL_CreateTableRow(pstLog, &stTable, "m_fOffset", value);
+	switch(m_gradMethod)
+	{
+		case GradMethod::EDGE_QUADRATIC:
+			_snprintf(value, sizeof(value), "EDGE_QUADRATIC");
+			break;
+		case GradMethod::EDGE_GAUSS:
+			_snprintf(value, sizeof(value), "EDGE_GAUSS");
+			break;
+		case GradMethod::EDGE_SIGMOID:
+			_snprintf(value, sizeof(value), "EDGE_SIGMOID");
+			break;
+		case GradMethod::EDGE_RISING:
+			_snprintf(value, sizeof(value), "EDGE_RISING");
+			break;
+		default:
+			_snprintf(value, sizeof(value), "%d", (IMG_INT)m_iGradKernal);
+			break;
+	}
+	HL_CreateTableRow(pstLog, &stTable, "m_gradMethod", value);
+	switch(m_edgeDir)
+	{
+		case EDGETYPE::ANY:
+			_snprintf(value, sizeof(value), "ANY");
+			break;
+		case EDGETYPE::LIGHT2DARK:
+			_snprintf(value, sizeof(value), "LIGHT2DARK");
+			break;
+		case EDGETYPE::DARK2LIGHT:
+			_snprintf(value, sizeof(value), "DARK2LIGHT");
+			break;
+		case EDGETYPE::WHITECENTER:
+			_snprintf(value, sizeof(value), "WHITECENTER");
+			break;
+		case EDGETYPE::BLACKCENTER:
+			_snprintf(value, sizeof(value), "BLACKCENTER");
+			break;
+		case EDGETYPE::BOTH:
+			_snprintf(value, sizeof(value), "BOTH");
+			break;
+		default:
+			_snprintf(value, sizeof(value), "%d", m_edgeDir);
+			break;
+	}
+	HL_CreateTableRow(pstLog, &stTable, "m_edgeDir", value);
+	_snprintf(value, sizeof(value), "%f", m_MaxBlackWhiteCenterWidth);
+	HL_CreateTableRow(pstLog, &stTable, "m_MaxBlackWhiteCenterWidth", value);
+	_snprintf(value, sizeof(value), "%f", m_MinBlackWhiteCenterWidth);
+	HL_CreateTableRow(pstLog, &stTable, "m_MinBlackWhiteCenterWidth", value);
+	switch(m_edgeSelect)
+	{
+		case EdgePriorSelect::ALL:
+			_snprintf(value, sizeof(value), "ALL");
+			break;
+		case EdgePriorSelect::FIRST:
+			_snprintf(value, sizeof(value), "FIRST");
+			break;
+		case EdgePriorSelect::BEST:
+			_snprintf(value, sizeof(value), "BEST");
+			break;
+		case EdgePriorSelect::NEARCENTER:
+			_snprintf(value, sizeof(value), "NEARCENTER");
+			break;
+		default:
+			_snprintf(value, sizeof(value), "%d", m_edgeSelect);
+			break;
+
+	}
+	HL_CreateTableRow(pstLog, &stTable, "m_edgeSelect", value);
+	switch(m_gradLevel)
+	{
+		case GRADLEVEL_EDGE::DARK:
+			_snprintf(value, sizeof(value), "DARK");
+			break;
+		case GRADLEVEL_EDGE::NORMAL:
+			_snprintf(value, sizeof(value), "NORMAL");
+			break;
+		case GRADLEVEL_EDGE::LIGHT:
+			_snprintf(value, sizeof(value), "LIGHT");
+			break;
+		case GRADLEVEL_EDGE::USERINPUT:
+			_snprintf(value, sizeof(value), "USERINPUT");
+			break;
+		default:
+			_snprintf(value, sizeof(value), "%d", m_gradLevel);
+			break;
+	}
+	HL_CreateTableRow(pstLog, &stTable, "m_gradLevel", value);
+	switch(m_gradMethod)
+	{
+		case GradMethod::EDGE_QUADRATIC:
+			_snprintf(value, sizeof(value), "EDGE_QUADRATIC");
+			break;
+		case GradMethod::EDGE_GAUSS:
+			_snprintf(value, sizeof(value), "EDGE_GAUSS");
+			break;
+		case GradMethod::EDGE_SIGMOID:
+			_snprintf(value, sizeof(value), "EDGE_SIGMOID");
+			break;
+		case GradMethod::EDGE_RISING:
+			_snprintf(value, sizeof(value), "EDGE_RISING");
+			break;
+		default:
+			_snprintf(value, sizeof(value), "%d", m_gradMethod);
+			break;
+	}
+	HL_CreateTableRow(pstLog, &stTable, "m_gradMethod", value);
+	_snprintf(value, sizeof(value), "%d", m_iMinGrad);
+	HL_CreateTableRow(pstLog, &stTable, "m_iMinGrad", value);
+	switch(m_iOption)
+	{
+		case FindEdgeOption::OPTION_NONE:
+			_snprintf(value, sizeof(value), "OPTION_NONE");
+			break;
+		case FindEdgeOption::OPTION_MEDIAN_TANDIR:
+			_snprintf(value, sizeof(value), "OPTION_MEDIAN_TANDIR");
+			break;
+		default:
+			_snprintf(value, sizeof(value), "%d", m_iOption);
+			break;
+	}
+	HL_CreateTableRow(pstLog, &stTable, "m_iOption", value);
+	HL_CloseTable(pstLog);
+}
+void CVisEdge::OutputEdgeTable(IMG_RCOORD *prcoEdge, IMG_REAL *Magnitude, IMG_REAL *Angle, IMG_INT num_edge, IMG_CHAR *title)
+{
+	CVisMemPool pool;
+	HTMLLOGGING_TABLE_DATA stTable;
+	HL_InitTableData(&stTable);
+	stTable.title = title;
+	stTable.tablelinewidth = 0;
+	stTable.column = 5;
+	stTable.fontweight = FW_Medium;
+	stTable.tablealign = TX_CENTER;
+	stTable.tablewidth = 50;
+	stTable.tablelinewidth = 1;
+	stTable.bgColorOddLine = 0xffff7f;
+	stTable.formatstring = "%.6f";
+	stTable.datatype = DT_REAL;
+	stTable.heading = (IMG_CHAR **)pool.Malloc(12 * sizeof(IMG_CHAR *));
+	VALIDATE_MALLOC(stTable.heading);
+	stTable.heading[0] = "ID";
+	stTable.heading[1] = "PosX";
+	stTable.heading[2] = "PosY";
+	stTable.heading[3] = "Magnitude";
+	stTable.heading[4] = "Angle";
+	HL_CreateTableHeader(m_pHtmlLog, &stTable);
+	for (int i = 0; i < num_edge; i++)
+	{
+		char value[5][20];
+		if (i % 2)		stTable.bgColorOddLine = 0xffffaf;
+		else			stTable.bgColorOddLine = 0xffffcf;
+		_snprintf(value[0], sizeof(value[0]), "%d", i);
+		_snprintf(value[1], sizeof(value[1]), "%.3f", prcoEdge[i].x);
+		_snprintf(value[2], sizeof(value[2]), "%.3f", prcoEdge[i].y);
+		if(Magnitude)_snprintf(value[3], sizeof(value[3]), "%.3f", Magnitude[i]);
+		else _snprintf(value[3], sizeof(value[3]), "N/A");
+		if(Angle)	_snprintf(value[4], sizeof(value[4]), "%.3f", Angle[i]);
+		else _snprintf(value[4], sizeof(value[4]), "N/A");
+		HL_CreateTableRow(m_pHtmlLog, &stTable, value[0], value[1], value[2], value[3], value[4]);
+	}
+	HL_CloseTable(m_pHtmlLog);
+	HL_Printf(m_pHtmlLog, "\n");
+}
+void CVisEdge::OutputEdgeTable(vector<IMG_RCOORD> &pstEdge, IMG_REAL *Magnitude, IMG_REAL *Angle, IMG_CHAR *title)
+{
+	CVisMemPool pool;
+	HTMLLOGGING_TABLE_DATA stTable;
+	HL_InitTableData(&stTable);
+	stTable.title = title;
+	stTable.tablelinewidth = 0;
+	stTable.column = 5;
+	stTable.fontweight = FW_Medium;
+	stTable.tablealign = TX_CENTER;
+	stTable.tablewidth = 50;
+	stTable.tablelinewidth = 1;
+	stTable.bgColorOddLine = 0xffff7f;
+	stTable.formatstring = "%.6f";
+	stTable.datatype = DT_REAL;
+	stTable.heading = (IMG_CHAR **)pool.Malloc(12 * sizeof(IMG_CHAR *));
+	VALIDATE_MALLOC(stTable.heading);
+	stTable.heading[0] = "ID";
+	stTable.heading[1] = "PosX";
+	stTable.heading[2] = "PosY";
+	stTable.heading[3] = "Magnitude";
+	stTable.heading[4] = "Angle";
+	HL_CreateTableHeader(m_pHtmlLog, &stTable);
+	for (int i = 0; i < pstEdge.size(); i++)
+	{
+		char value[5][20];
+		if (i % 2)		stTable.bgColorOddLine = 0xffffaf;
+		else			stTable.bgColorOddLine = 0xffffcf;
+		_snprintf(value[0], sizeof(value[0]), "%d", i);
+		_snprintf(value[1], sizeof(value[1]), "%.3f", pstEdge[i].x);
+		_snprintf(value[2], sizeof(value[2]), "%.3f", pstEdge[i].y);
+		if(Magnitude)_snprintf(value[3], sizeof(value[3]), "%.3f", Magnitude[i]);
+		else _snprintf(value[3], sizeof(value[3]), "N/A");
+		if(Angle)	_snprintf(value[4], sizeof(value[4]), "%.3f", Angle[i]);
+		else _snprintf(value[4], sizeof(value[4]), "N/A");
+		HL_CreateTableRow(m_pHtmlLog, &stTable, value[0], value[1], value[2], value[3], value[4]);
+	}
+	HL_CloseTable(m_pHtmlLog);
+	HL_Printf(m_pHtmlLog, "\n");
+}
+void CVisEdge::DrawResultImage(CVisImage &canvas)
+{
+	IMG_RCOORD start, end, corner[4];
+	IMG_REAL halfwidth, angle, factor;
+	factor = 4;
+	if(factor > 1)canvas.ResizeLinear(factor);
+	start = {m_lineStart.x*factor, m_lineStart.y*factor};
+	end = {m_lineEnd.x*factor, m_lineEnd.y*factor};
+	angle = atan2(end.y-start.y, end.x-start.x);
+	canvas.DrawPoint(&start, 1, COLORS::Fuchsia);
+	halfwidth = m_normalVari*factor;
+	corner[0].x = halfwidth*sin(angle)+start.x;
+	corner[0].y = -halfwidth*cos(angle)+start.y;
+	corner[1].x = halfwidth*sin(angle)+end.x;
+	corner[1].y = -halfwidth*cos(angle)+end.y;
+	corner[2].x = -halfwidth*sin(angle)+end.x;
+	corner[2].y = halfwidth*cos(angle)+end.y;
+	corner[3].x = -halfwidth*sin(angle)+start.x;
+	corner[3].y = halfwidth*cos(angle)+start.y;
+	canvas.DrawLine(start, end, COLORS::Red);
+	for(int i = 0; i<3; i++)
+		canvas.DrawLine(corner[i], corner[i+1], COLORS::Green);
+	canvas.DrawLine(corner[3], corner[0], COLORS::Green);
+	if(factor > 1)
+	{
+		IMG_RCOORD *pt = new IMG_RCOORD[m_ptNums], *ptEnd = new IMG_RCOORD[m_ptNums];
+		for(int i = 0; i<m_ptNums; i++)
 		{
-			state = false;
+			pt[i].x = m_EdgePts[i].x*factor;
+			pt[i].y = m_EdgePts[i].y*factor;
+			ptEnd[i].x = m_EdgePts[i].x*factor + 30 * cos(m_Angle[i] * PI / 180)*factor;
+			ptEnd[i].y = m_EdgePts[i].y*factor + 30 * sin(m_Angle[i] * PI / 180)*factor;
+			canvas.DrawArrow(pt[i], ptEnd[i], COLORS::Red);
 		}
-		return state;
+		canvas.DrawPoint(pt, m_ptNums, COLORS::Blue);
+
+		delete pt;
 	}
-
-};
-
-struct VIS_IMG_FILE_INFO
+	else canvas.DrawPoint(m_EdgePts, m_ptNums, COLORS::Blue);
+}
+void CVisEdge::DrawChat(IMG_RBUF *data, CVisImage &canvas, IMG_UINT ptnum, IMG_RCOORD *pts)
 {
-	IMG_UBYTE path[MAX_FILE_NAME];
-};
-
-struct edgeInformation
-{
-	IMG_ICOORD xyInteger; //像素点
-	IMG_RCOORD xyDecimal;//亚像素点
-	int gradient;//灰度梯度
-	int grayValue;//灰度值
-	float angle;//角度
-	bool operator == (const edgeInformation &value)
+	IMG_SIZE sz;
+	sz.width = data->size.width*5+40;
+	sz.height = 601;
+	CVisImage im(sz, 240, VIS_IMG_RGB, VIS_IMG_UINT8);
+	im.DrawLine({0.0f, 300.0f}, {(IMG_REAL)sz.width, 300.0f}, COLORS::Blue);
+	im.DrawLine({20.0f, 0.0f}, {(IMG_REAL)20.0, 600.0f}, COLORS::Blue);
+	IMG_RCOORD pt;
+	IMG_RCOORD *pts1 ;
+	for(int i = 0; i<= 6; i++)
 	{
-		return (xyInteger.x == value.xyInteger.x&&
-			xyInteger.y == value.xyInteger.y&&
-			xyDecimal.x == value.xyDecimal.x&&
-			xyDecimal.y == value.xyDecimal.y&&
-			gradient == value.gradient&&
-			grayValue == value.grayValue&&
-			angle == value.angle);
+		pt.x = 20;
+		pt.y = i*100;
+		im.DrawPoint(&pt, 1, COLORS::Blue);
 	}
-	edgeInformation& operator=(edgeInformation& value)
+	for(int i = 0; i<= data->size.width; i+=100)
 	{
-		xyInteger.x = value.xyInteger.x;
-		xyInteger.y = value.xyInteger.y;
-		xyDecimal.x = value.xyDecimal.x;
-		xyDecimal.y = value.xyDecimal.y;
-		gradient = value.gradient;
-		grayValue = value.grayValue;
-		angle = value.angle;
-		return *this;
+		pt.x = 20+i;
+		pt.y = 300;
+		im.DrawPoint(&pt, 1, COLORS::Blue);
 	}
-};//边缘点 
-typedef struct _TIFF_FILE_INFORMATION
+	for(int i = 0; i<data->size.width-1; i++)
+	{
+		im.DrawLine({(IMG_REAL)(20+i*5), 300-data->ptr[i]}, {(IMG_REAL)(21+(i+1)*5), 300-data->ptr[i+1]}, COLORS::Red);
+	}
+	if(ptnum > 0)
+	{
+		pts1 = new IMG_RCOORD[ptnum]; 
+		VALIDATE_MALLOC(pts1);
+		for(int i = 0; i<ptnum; i++)
+		{
+			pts1[i].x = pts[i].x*5+20;
+			int j = floor(pts[i].x);
+			if(j>= 0 && j<data->size.width)
+			{
+				pts1[i].y = 300-(data->ptr[j]*(1- pts[i].x+j)+data->ptr[j+1]*(pts[i].x-j));
+			}
+			else
+			{
+				pts1[i].y = 0;
+			}
+		}
+		im.DrawPoint(pts1, ptnum, COLORS::Green);
+		delete pts1;
+	}
+	canvas.CopyFrom(im);
+
+}
+IMG_VVOID CVisEdge::Serialize(CMEMPack &mp)
 {
-	IMG_RCOORD xyWorld;
-	IMG_RSIZE szWorldResolution;
-}VIS_TIFF_INFOMATION;
-
-class  DLLEXPORT CVisImage
+	CMEMPackHeader pack_header(this, mp);
+	IMG_PVVOID p = NULL;
+	IMG_UINT u;
+	mp.Proc(m_uwDebug);
+	mp.Proc(m_lineStart);
+	mp.Proc(m_lineEnd);
+	mp.Proc(m_normalVari);
+	mp.Proc(m_iGradKernal);
+	mp.Proc(m_fOffset);
+	mp.Proc(m_dGaussSigmaWidth);
+	mp.Proc(m_dGaussSigmaHeight);
+	mp.Proc(m_dGaussKerWidth);
+	mp.Proc(m_dGaussKerHeight);
+	u = (IMG_UINT)m_edgeDir;
+	mp.Proc(u);
+	m_edgeDir = (EDGETYPE)u;
+	u = (IMG_UINT)m_edgeSelect;
+	mp.Proc(u);
+	m_edgeSelect = (EdgePriorSelect)u;
+	u = (IMG_UINT)m_gradLevel;
+	mp.Proc(u);
+	m_gradLevel = (GRADLEVEL_EDGE)u;
+	u = (IMG_UINT)m_gradMethod;
+	mp.Proc(u);
+	m_gradMethod = (GradMethod)u;
+	mp.Proc(m_iMinGrad);
+	u = (IMG_UINT)m_iOption;
+	mp.Proc(u);
+	m_iOption = (FindEdgeOption)u;
+	mp.Proc(m_ROI.coWindowOff);
+	mp.Proc(m_ROI.szWindowSize);
+	mp.Proc(m_MaxBlackWhiteCenterWidth);
+	mp.Proc(m_MinBlackWhiteCenterWidth);
+}
+void CVisEdge::SetImage(IMG_UBBUF *img, IMG_UBBUF *mask)
 {
-public:
-	CVisImage();
-	~CVisImage();
-	CVisImage(IMG_SIZE szImage, IMG_UINT init_value = 0, CHANNEL_INFO channel = VIS_IMG_GRAY, PIXEL_TYPE type = VIS_IMG_UINT8);
-	CVisImage(const CVisImage &img);
-	operator IMG_UBBUF * ();
-	operator IMG_UBBUF();
-	operator IMG_WBUF * ();
-	operator IMG_WBUF();
-	operator IMG_RBUF * ();
-	operator IMG_RBUF();
-	//CVisImage(IMG_UBBUF img);			//create by reference
-	//CVisImage(IMG_UBBUF img[3]);
-	//CVisImage(IMG_WBUF img);
-	//CVisImage(IMG_RBUF img);
-	CVisImage(const IMG_UBBUF img);
-	CVisImage(const IMG_UBBUF img[3]);
-	CVisImage(const IMG_WBUF img);
-	CVisImage(const IMG_RBUF img);
-	static void ExitWriteThread(void);
-	IMG_INT Width() { return m_Imginfo.width; }
-	IMG_INT Height() { return m_Imginfo.height; }
-	IMG_INT GetChannels() { return (IMG_INT)m_Imginfo.channel; }
-	IMG_INT GetPageNum() { return m_Imginfo.page_num; }
-	PIXEL_TYPE GetPixelType() { return m_Imginfo.pixel_type; }
-	bool IsEmpty() { return Width()*Height() == 0; }
-	bool GetImageInfo(VIS_IMAGE_INFO &imginfo);
-	bool GetImageInfo(VIS_IMAGE_INFO &imginfo) const;
-	bool SetImageInfo(VIS_IMAGE_INFO &imginfo);
-	bool GetImagePlatte_BMP(IMG_UBYTE *img_platte, IMG_UINT &size);
-	bool SetImagePlatte_BMP(IMG_UBYTE *img_platte, IMG_UINT size);
-	bool SetImage(void **ppImage);
-	bool SetImage(const void **ppImage);
-	bool SetImage(const IMG_UBBUF &img);
-	bool SetImage(const IMG_UBBUF img[3]);
-	bool SetImage(const IMG_WBUF &img);
-	bool SetImage(const IMG_RBUF &img);
-	bool InitImage(IMG_SIZE szImage, IMG_UINT init_value = 0, CHANNEL_INFO channel = VIS_IMG_GRAY, PIXEL_TYPE type = VIS_IMG_UINT8);
-	bool GetImage(const void **ppImage) const;
-	bool GetImage(const IMG_UBBUF *pubbuf) const;
-	bool GetImage(const IMG_RBUF *pubbuf) const;
-	bool GetImage(const IMG_WBUF *pubbuf) const;
-	bool GetImage(void **ppImage);
-	bool GetImage(IMG_UBBUF *pubbuf);
-	bool GetImage(IMG_WBUF *pubbuf);
-	bool GetImage(IMG_RBUF *pubbuf);
-	bool GetImageByChannel(void *&ppImage, IMG_UINT ch); //Exemple: type BMP/JPG/PNG RGB, channel 1, ch = 1; type tiff 8 bits, Page 2 , ch = 2
-	bool ReadImage(const char* filename);
-	bool WriteImage(const char *filename);
-	bool WriteImage_Syn(const char *filename);
-	bool Reset();
-	bool CopyFrom(CVisImage &srcImage);
-	bool CopyFrom(const CVisImage &srcImage);
+	if (img)
+	{
+		m_Img.ptr = img->ptr;
+		m_Img.linestep = img->linestep;
+		m_Img.size = img->size;
+	}
+	if (mask)
+	{
+		m_Mask.ptr = mask->ptr;
+		m_Mask.linestep = mask->linestep;
+		m_Mask.size = mask->size;
+	}
+}
 
-	//bool Split(void *pImage);
-	bool Merge(void *&pImage);
-	bool Add(CVisImage &srcImage);
-	bool Add_C(IMG_REAL num);
-	bool Sub(CVisImage &srcImage);
-	bool Sub_C(IMG_REAL num);
-	bool Mul(CVisImage &srcImage);
-	bool Mul_C(IMG_REAL num);
-	bool Div(CVisImage &srcImage);
-	bool Div_C(IMG_REAL num);
-	bool Abs(); // for 32 bits
-	bool Mean(IMG_LREAL& mean, IMG_INT channel = 0);
-	bool MaskMean(CVisImage &maskimg, IMG_LREAL &mean, IMG_INT channel = 0);
-	bool Sum(IMG_LREAL& sum, IMG_INT channel = 0);
-	bool Min(IMG_REAL& min, IMG_INT channel = 0);
-	bool Max(IMG_REAL& max, IMG_INT channel = 0);
-	bool Min_Index(IMG_REAL& min, IMG_INT& x, IMG_INT& y, IMG_INT channel = 0);
-	bool Max_Index(IMG_REAL& max, IMG_INT& x, IMG_INT& y, IMG_INT channel = 0);
-	bool And(CVisImage &srcImage); //byte only
-	bool Or(CVisImage &srcImage); //byte only
-	bool Xor(CVisImage &srcImage);//byte only
-	bool And_C(IMG_BYTE val); //byte only
-	bool Or_C(IMG_BYTE val); //byte only
-	bool Xor_C(IMG_BYTE val);//byte only
-	bool Not();
-	bool sqrt();
-	bool sqr();
-	bool Threshold(IMG_REAL thres, IMG_REAL thres_val, Threshold_TYPE thres_type);
-	bool Threshold_double(IMG_REAL LT, IMG_REAL LT_val, IMG_REAL GT, IMG_REAL GT_val);
-	bool Convert_8u_to_16s();
-	bool Convert_8u_to_32f();
-	bool Convert_16s_to_8u();
-	bool Convert_16s_to_32f();
-	bool Convert_32f_to_8u();
-	bool Convert_32f_to_16s();
-	bool ResizeLinear(IMG_REAL ScaleSize);
-	bool Crop(IMG_COORD start, IMG_SIZE dstsize);
-	bool FillPolygonByScanline(IMG_COORD points[], IMG_INT numPoints, void* value);
-	bool MesurementPolygonByScanline(IMG_COORD points[], IMG_INT numPoints, IMG_INT option, IMG_REAL* value);
-	bool Erosion(IMG_INT KernelSize);
-	bool Dilation(IMG_INT KernelSize);
-	bool Closing(IMG_INT Width, IMG_INT Height);
-	bool Opening(IMG_INT Width, IMG_INT Height);
-	bool Gradient(IMG_INT Width, IMG_INT Height);
-	bool Mirror(Axis axis);
-	bool RTS(IMG_RCOORD &rcoSrcCenter, IMG_RCOORD &rcoDstCenter, IMG_REAL rAngle, IMG_REAL rScale);
-	bool RTS(CVisImage &src, IMG_RCOORD &rcoSrcCenter, IMG_RCOORD &rcoDstCenter, IMG_REAL rAngle, IMG_REAL rScale);
-	bool FFT(CVisImage &fft_img);
-	bool Histogram(IMG_INT nBins, IMG_INT channel, IMG_REAL *pLevels, IMG_UINT* pHistVec);
-	bool FFT_Inv(CVisImage &Image_Inv, IMG_UINT Dst_Width, IMG_UINT Dst_Height);
-	bool SubImage(IMG_COORD start, IMG_SIZE size, CVisImage &subimage);
-	bool FilterGaussian(IMG_INT kernelSize, IMG_REAL sigma);
-	bool CenterOfMass(IMG_RCOORD& outputpoint);
-	bool Std(IMG_LREAL& std, IMG_LREAL& mean, IMG_INT channel = 0);
-	bool Brightness(IMG_REAL BrightLevel = 0);
-	bool Equalization(IMG_INT nBins);
-	bool FilterPrewittHorizBorder(IMG_INT masksize);
-	bool FilterPrewittVertBorder(IMG_INT masksize);
-	bool Contrast(IMG_REAL Threshold, IMG_REAL ContrastLevel);
-	bool FilterHiPass(IMG_INT kernelSize);
-	bool FilterLowPass(IMG_INT kernelSize);
-	bool FilterMax(IMG_INT masksize);
-	bool FilterMin(IMG_INT masksize);
-	bool FilterSobelHorizBorder(IMG_INT masksize);
-	bool FilterSobelVertBorder(IMG_INT masksize);
-	bool FilterSobelBorder(IMG_INT masksize);
-	bool FilterSobelSubpixel(IMG_INT masksize, edgeInformation *edgeArray, IMG_INT &eNum);
-	bool FilterMedian(IMG_INT masksize);
-	bool FilterMean(IMG_INT masksize);
-	bool CannyBorder(IMG_INT normsize, IMG_INT lowThresh, IMG_INT highThresh);
-	bool FilterLaplace(IMG_INT kernelSize);
-	bool FilterSharpen(IMG_INT kernelSize);
-	bool FilterBorder(IMG_WORD *pKernel, IMG_SIZE kernelSize);
-	bool Transpose();
-	bool CanvasSize(IMG_SIZE roisize, IMG_INT position = 22);
-	bool AddRandUniform(IMG_INT low, IMG_INT high, IMG_UINT pSeed);
-	bool AddRandGauss(IMG_INT mean, IMG_INT stDev, IMG_UINT pSeed);
-	bool CopyConstBorder(IMG_INT borderVal, IMG_INT borderWidth, IMG_INT borderHeight);
-	bool CopyMirrorBorder(IMG_INT borderWidth, IMG_INT borderHeight);
-	bool MaskImageMesurement(CVisImage &maskImage, Mesurement m, IMG_REAL* value);
-	bool ResizeLanczos(IMG_REAL ScaleSize);
-	bool ResizeNearest(IMG_REAL ScaleSize);
-	bool ResizeCubic(IMG_REAL ScaleSize, IMG_REAL value_B, IMG_REAL value_C);
-	bool RGBToGray();
-	bool GrayTo16Colors(CVisImage & colors_img);
-	bool Colors(IMG_INT R, IMG_INT G, IMG_INT B);
-	bool GrayToRGB();
-	bool DrawCircle(IMG_CIRCLE Circle, IMG_INT color);
-	bool DrawLine(IMG_RCOORD staPoint, IMG_RCOORD endPoint, IMG_INT color,IMG_INT lineWidth = 1);
-	bool DrawRect(IMG_WINDOW rectWin, IMG_INT color,IMG_INT lineWidth = 1);
-	bool DrawRect(IMG_RORECT rotateRect, IMG_INT color,IMG_INT lineWidth = 1);
-	bool DrawWindow(IMG_WINDOW roiWin, IMG_INT color, IMG_INT lineWidth = 1);
-	bool DrawPolygon(IMG_RCOORD *Point, IMG_INT color, IMG_INT numPoint);
-	bool DrawPoint(IMG_RCOORD *Point, IMG_INT numPoint, IMG_INT color);
-	bool DrawArrow(IMG_RCOORD start, IMG_RCOORD end, IMG_INT color);
-	bool DrawText_(const char* str, IMG_COORD leftUpCoor, IMG_INT color, int fontHeight, int fontThickness = 400, const char *fn = "Arial", bool italic = false, bool underline = false);
-	bool DrawMask(CVisImage &maskimg, IMG_INT color);
-	bool Min_Circumcircle(IMG_RCOORD *Point, IMG_INT numPoint, IMG_CIRCLE &Circle);
-	bool Min_CircumRorect(IMG_RCOORD *Point, IMG_INT numPoint, IMG_RORECT &RoRect);
-	bool ProjectVertical(IMG_VVOID *dst, IMG_INT size_dst, IMG_UWORD channel = 0);	//FOR UINT8 and WORD16, dst is LWORD, for REAL, dst is real
-	bool ProjectHorizon(IMG_VVOID *dst, IMG_INT size_dst, IMG_UWORD channel = 0);		//FOR UINT8 and WORD16, dst is LWORD, for REAL, dst is real
-	//bool Convolve_2D(CVisImage &dst, IMG_REAL *pKernelX, IMG_INT iKernelSizeX, IMG_REAL *pKernelY, IMG_INT iKernelSizeY);
+void CVisEdge::SetLine(IMG_RCOORD lineStart, IMG_RCOORD lineEnd)
+{
+	m_lineStart.x = lineStart.x;
+	m_lineStart.y = lineStart.y;
+	m_lineEnd.x = lineEnd.x;
+	m_lineEnd.y = lineEnd.y;
+}
 
-	bool SetTiffInformation(VIS_TIFF_INFOMATION *tifinfo);
-	VIS_TIFF_INFOMATION * GetTiffInformation(void) { return m_pTiffInfo; }
-private:
-	bool GrayToRGB(CVisImage &colors_img);
-	IMG_INT Type(const char* file);
-	void ExtractRGB(IMG_UBYTE* pointer, size_t size);
-	void WriteData(const int channel);
-	bool SetSubImage(void **ppImamge, IMG_UINT sub_start_x, IMG_UINT sub_start_y);
-	bool CanvasSizeTemp(IMG_INT srcStep, IMG_INT dstStep, IMG_INT channel, IMG_UBYTE *&pCopyVec, IMG_SIZE roisize, IMG_SIZE StrPoint);
-	bool getIntraClassVariance(IMG_UWORD* src, IMG_INT srcRows, IMG_INT srcCols, IMG_INT &varTh, IMG_REAL &varian);
+void CVisEdge::SetLineWidth(IMG_REAL halfWidth)
+{
+	m_normalVari = halfWidth;
+}
 
-private:
-	IMG_UBYTE *m_arrPalette;
-	IMG_INT m_paletteSize = 0;
-	IMG_INT m_imageType;
-	IMG_BOOL m_bInternalMalloc;
-	VIS_IMAGE_INFO m_Imginfo;
-	char *m_FileName;
-	void **m_arrChannel;
-	VIS_TIFF_INFOMATION *m_pTiffInfo;
-	unsigned char * p_images;
-	bool m_isSubImage = false;
-public:
-	// // free and reset the image class
-	void Free();
-	void LightCorrectWithRefImage(CVisImage * pRefImage);
-	void GenerateLightReferenceImage(void);
-};
+void CVisEdge::GetLineWidth(IMG_REAL &halfWidth)
+{
+	halfWidth = m_normalVari;
+}
+
+void CVisEdge::SetGradKernal(IMG_INT kernal)
+{
+	m_iGradKernal = kernal;
+}
+
+void CVisEdge::SetPixelOffset(IMG_REAL offset)
+{
+	m_fOffset = offset;
+}
+
+void CVisEdge::SetGaussFilterPara(IMG_REAL sigmaWidth, IMG_REAL sigmaHeight, IMG_UINT kerWidth, IMG_UINT kerHeight)
+{
+	m_dGaussSigmaWidth = sigmaWidth;
+	m_dGaussSigmaHeight = sigmaHeight;
+	m_dGaussKerWidth = kerWidth;
+	m_dGaussKerHeight = kerHeight;
+}
+
+void CVisEdge::SetEdgeDir(EDGETYPE edgeDir)
+{
+	m_edgeDir = edgeDir;
+}
+
+void CVisEdge::SetPriorSelect(EdgePriorSelect edgeSelect)
+{
+	m_edgeSelect = edgeSelect;
+}
+
+void CVisEdge::SetGRADLEVEL_EDGE(GRADLEVEL_EDGE gradLevel, IMG_INT minGrad)
+{
+	m_gradLevel = gradLevel;
+	m_iMinGrad = minGrad;
+}
+
+void CVisEdge::SetGradMethod(GradMethod gradMethod)
+{
+	m_gradMethod = gradMethod;
+}
+
+void CVisEdge::GetEdgePts(IMG_RCOORD *&edgePts, IMG_INT &ptNums)
+{
+	ptNums = m_ptNums;
+	if (ptNums != 0)
+	{
+		if(edgePts == nullptr) edgePts = new IMG_RCOORD[ptNums];
+		for (int i = 0; i < m_ptNums; i++)
+		{
+			edgePts[i].x = m_EdgePts[i].x;
+			edgePts[i].y = m_EdgePts[i].y;
+		}
+	}
+	else
+	{
+		edgePts = nullptr;
+	}
+}
+void CVisEdge::GetEdge(IMG_RCOORD *&edgePts, IMG_REAL *&edgeMag, IMG_REAL *&edgeAngle, IMG_INT &ptNums)
+{
+	ptNums = m_ptNums;
+	if (ptNums != 0)
+	{
+		if(edgePts == nullptr)edgePts = new IMG_RCOORD[ptNums];
+		if(edgeMag == nullptr)edgeMag = new IMG_REAL[ptNums];
+		if(edgeAngle == nullptr)edgeAngle = new IMG_REAL[ptNums];
+		for (int i = 0; i < m_ptNums; i++)
+		{
+			edgePts[i].x = m_EdgePts[i].x;
+			edgePts[i].y = m_EdgePts[i].y;
+			edgeMag[i] = m_Magnitude[i];
+			edgeAngle[i] = m_Angle[i];
+		}
+	}
+	else
+	{
+		edgePts = nullptr;
+		edgeMag = nullptr;
+		edgeAngle = nullptr;
+	}
+}
+void CVisEdge::GetEdge(EDGE_INFORMATION *&edge, IMG_INT &ptNums)
+{
+	ptNums = m_ptNums;
+	if (ptNums != 0)
+	{
+		if(edge == nullptr)edge = new EDGE_INFORMATION[ptNums];
+		for (int i = 0; i < m_ptNums; i++)
+		{
+			edge[i].coPos.x = (m_EdgePts[i].x + 0.5);
+			edge[i].coPos.y = (m_EdgePts[i].y + 0.5);
+			edge[i].rcoPos = m_EdgePts[i];
+			edge[i].gradient = m_Magnitude[i];
+			edge[i].angle = m_Angle[i];
+		}
+	}
+	else
+	{
+		edge = nullptr;
+	}
+}
+
+
+
+IMG_INT CVisEdge::FindEdgePts()
+{
+	CVisMemPool pool;
+	IMG_UINT ulEdgeSearchLogIndex;
+	vector<IMG_RCOORD>EdgePts, EdgeSrcPts;
+	vector<IMG_REAL>EdgeMag;
+	IMG_RBUF dstRoiGrad = { 0 };
+	IMG_RBUF dstRoiProj = { 0 };
+	IMG_CHAR pathname[FILENAME_MAX_LENGTH], *p;
+	IMG_UBBUF mImage = m_Img, mMask =m_Mask;
+	vector<IMG_RCOORD> vPoint1, vPoint2;//存放黑白中心两边的点
+	IMG_UBBUF src_save = m_Img;
+	IMG_UBBUF mask_save = m_Mask;
+	IMG_RCOORD startPt_save = m_lineStart;
+	IMG_RCOORD endPt_save = m_lineEnd;
+	CVisClock debug_clock;
+	m_ptNums = 0;
+
+	if((size_t)m_ROI.szWindowSize.width*m_ROI.szWindowSize.height == 0 && m_useROI)
+	{
+		IMG_REAL length = ALIGN_DIST(m_lineStart, m_lineEnd);
+		IMG_RCOORD center = { (m_lineStart.x + m_lineEnd.x) / 2, (m_lineStart.y + m_lineEnd.y) / 2 };
+		IMG_COORD UL, BR;
+		UL.x = floor(center.x-length-m_normalVari);
+		UL.y = floor(center.y-length-m_normalVari);
+		BR.x = floor(center.x+length+m_normalVari);
+		BR.y = floor(center.y+length+m_normalVari);
+		if(UL.x < 0)UL.x = 0;
+		if(UL.y < 0)UL.y = 0;
+		if(BR.x >= mImage.size.width)BR.x = mImage.size.width-1;
+		if(BR.y >= mImage.size.height)BR.y = mImage.size.height-1;
+		if (UL.x >= BR.x || UL.y >= BR.y || BR.x <= 0 || BR.y <= 0)
+		{
+			return 0;
+		}
+		m_ROI.coWindowOff = UL;
+		m_ROI.szWindowSize = {(BR.x-UL.x+1), (BR.y-UL.y+1)};
+		mImage.ptr += m_ROI.coWindowOff.x+m_ROI.coWindowOff.y*(size_t)mImage.linestep;
+		mImage.size = m_ROI.szWindowSize;
+		if(mMask.ptr && (size_t)mMask.size.width*mMask.size.height > 0)
+		{
+			mMask.ptr += m_ROI.coWindowOff.x+m_ROI.coWindowOff.y*(size_t)mMask.linestep;
+			mMask.size = m_ROI.szWindowSize;
+		}
+		m_lineStart.x -= m_ROI.coWindowOff.x;
+		m_lineStart.y -= m_ROI.coWindowOff.y;
+		m_lineEnd.x -= m_ROI.coWindowOff.x;
+		m_lineEnd.y -= m_ROI.coWindowOff.y;
+	}
+	if(m_uwDebug)
+	{
+		if (_access(m_strDebugPath, 06) != 0)
+		{
+			THROW_VIS_EXCEPTION_MESG(VIS_ERR_INVALID_ARG, "Cannot open debug log path");
+		}
+
+		if (g_MasterEdgeLogIndex == 0)
+		{
+			WIN32_FIND_DATA data;
+			int index, maxindex = 0;
+			HANDLE h_next;
+			BOOL nextfile = true;
+			_snprintf(pathname, FILENAME_MAX_LENGTH, "%s\\LOG*.*", m_strDebugPath);
+			h_next = FindFirstFile(pathname, &data);
+			while (h_next != INVALID_HANDLE_VALUE && nextfile)
+			{
+				char *p = data.cFileName;
+				sscanf(p, "LOG%d", &index);
+				if (index > maxindex) maxindex = index;
+				nextfile = FindNextFile(h_next, &data);
+			}
+			g_logIndexLock.try_lock_for(chrono::milliseconds(200));
+			if(g_MasterEdgeLogIndex==0)g_MasterEdgeLogIndex = maxindex+1;
+			else g_MasterEdgeLogIndex++;
+			if (g_MasterEdgeLogIndex > 99999)g_MasterEdgeLogIndex = 1;
+			g_EdgeLogIndex = g_MasterEdgeLogIndex;
+			g_logIndexLock.unlock();
+		}
+		else
+		{
+			g_MasterEdgeLogIndex ++;
+			if (g_MasterEdgeLogIndex > 99999)g_MasterEdgeLogIndex = 1;
+			g_EdgeLogIndex = g_MasterEdgeLogIndex;
+		}
+	}
+	ulEdgeSearchLogIndex = g_EdgeLogIndex;
+	if (m_uwDebug & 513)
+	{
+		IMG_CHAR pathname[FILENAME_MAX_LENGTH], *p;
+
+		_snprintf(pathname, FILENAME_MAX_LENGTH, "%s\\LOG%05uEdge.html", m_strDebugPath, ulEdgeSearchLogIndex);
+		logInit(pathname);
+		writeLog("Log start\n");
+#ifdef DEBUG
+		writeLog("Align Version Tag: %s, DEBUG\n", VisAlign::VIS_ALIGN_Version());
+#else
+		writeLog("Align Version Tag: %s Release\n", VisAlign::VIS_ALIGN_Version());
+#endif
+		writeLog("VisSystem Version Tag: %s\n", VIS_SYSTEM_DLL_Version());
+		writeLog("TCL Version Tag: %s\n", TCL_DLL_Version());
+
+#ifdef _WIN64
+		writeLog("build on %s %s, x64\n", __DATE__, __TIME__);
+#else
+		writeLog("build on %s %s, x86\n", __DATE__, __TIME__);
+#endif // _WIN64
+		_snprintf(pathname, FILENAME_MAX_LENGTH, "%s\\LOG%05uEdge", m_strDebugPath, ulEdgeSearchLogIndex);
+		_mkdir(pathname);
+		CVisImage srcImage(mImage);
+		_snprintf(pathname, FILENAME_MAX_LENGTH, "%s\\LOG%05uEdge.bmp", m_strDebugPath, ulEdgeSearchLogIndex);
+		srcImage.WriteImage(pathname);
+		writeLog("Source Image\n");
+		p = strrchr(pathname, '\\')+1;
+		HL_InsertImage(m_pHtmlLog, p);
+		if((size_t)mMask.size.width*mMask.size.height > 0)
+		{
+			CVisImage maskImage(mMask);
+			_snprintf(pathname, FILENAME_MAX_LENGTH, "%s\\LOG%05uEdgeMask.png", m_strDebugPath, ulEdgeSearchLogIndex);
+			maskImage.WriteImage(pathname);
+		}
+		else
+		{
+			CVisImage maskImage(mImage.size, 1);
+			_snprintf(pathname, FILENAME_MAX_LENGTH, "%s\\LOG%05uEdgeMask.png", m_strDebugPath, ulEdgeSearchLogIndex);
+			maskImage.WriteImage(pathname);
+		}
+
+		SaveOptionToHTMLLog(m_pHtmlLog);
+		if(m_uwDebug & 4)
+		{
+			writeLog("\n");
+			writeLog("Source Image ROI\n");
+			DrawResultImage(srcImage);
+			if(srcImage.Width()>JPG_SIZE_LIMITATION || srcImage.Height()>JPG_SIZE_LIMITATION)
+				_snprintf(pathname, FILENAME_MAX_LENGTH, "%s\\LOG%05uEdge\\LOG%05uEdgeROI.bmp", m_strDebugPath, ulEdgeSearchLogIndex, ulEdgeSearchLogIndex);
+			else
+				_snprintf(pathname, FILENAME_MAX_LENGTH, "%s\\LOG%05uEdge\\LOG%05uEdgeROI.jpg", m_strDebugPath, ulEdgeSearchLogIndex, ulEdgeSearchLogIndex);
+			srcImage.WriteImage(pathname);
+			p = strrchr(pathname, '\\')-12;
+			HL_InsertImage(m_pHtmlLog, p);
+		}
+
+		_snprintf(pathname, FILENAME_MAX_LENGTH, "%s\\LOG%05uEdge.opt", m_strDebugPath, ulEdgeSearchLogIndex);
+		SaveToFile(pathname);
+	}
+	if (m_uwDebug & ALIGN_DEBUG_TIME)
+	{
+		debug_clock.Start();
+		debug_clock.Click("Start");
+	}
+	IMG_UINT iGradKernal = m_iGradKernal;
+	int runState = 0;
+	if (m_EdgePts)
+	{
+		delete[]m_EdgePts;
+		m_EdgePts = nullptr;
+	}
+	if (m_Magnitude)
+	{
+		delete m_Magnitude;
+		m_Magnitude = nullptr;
+	}
+	if (m_Angle)
+	{
+		delete m_Angle;
+		m_Angle = nullptr;
+	}
+	if (mImage.ptr == NULL || mImage.size.width == 0 || mImage.size.height == 0)
+	{
+		runState = IMAGE_ERROR;
+		goto end;
+	}
+	if (m_normalVari < 0.0)
+	{
+		runState = LINEWIDTH_ERROR;
+		goto end;
+	}
+	switch (m_gradLevel)
+	{
+	case GRADLEVEL_EDGE::USERINPUT:
+		break;
+	/*case GRADLEVEL_EDGE::DARKER:
+		m_iMinGrad = 20;
+		break;*/
+	case GRADLEVEL_EDGE::DARK:
+		m_iMinGrad = 10;
+		break;
+	case GRADLEVEL_EDGE::NORMAL:
+		m_iMinGrad = 40;
+		break;
+	case GRADLEVEL_EDGE::LIGHT:
+		m_iMinGrad = 70;
+		break;
+	/*case GRADLEVEL_EDGE::LIGHTER:
+		m_iMinGrad = 200;*/
+		break;
+	default:
+		break;
+	}
+
+	//VisBuf visbuf; 
+	RECTROIEDGE roiStruct;
+	IMG_UBBUF dstRoi;
+	IMG_INT DisPoint;
+	IMG_SIZE roiSize;
+
+	//create roi
+	
+	DisPoint = (IMG_INT)ceil(sqrt(pow(m_lineEnd.y - m_lineStart.y, 2) + pow(m_lineEnd.x - m_lineStart.x, 2)));
+	roiSize.width = DisPoint;
+	roiSize.height = 1 + m_dGaussKerHeight + m_normalVari *2.0;
+	dstRoi.ptr = (IMG_UBYTE *)pool.Malloc((size_t)roiSize.width * roiSize.height);
+	if (dstRoi.ptr == nullptr)
+	{
+		THROW_VIS_EXCEPTION(MEM_ERR_MALLOC);
+	}
+	dstRoi.size.width = roiSize.width;
+	dstRoi.size.height = roiSize.height;
+	dstRoi.linestep = roiSize.width;
+	
+	runState = ROI_HORIZONTAL_ROTATION(mImage, { m_lineStart.x, m_lineStart.y}, { m_lineEnd.x, m_lineEnd.y }, m_normalVari, roiStruct, dstRoi);
+	if (runState != 0)
+	{
+		//if (dstRoi.ptr)
+		//{
+		//	delete[]dstRoi.ptr;
+		//	dstRoi.ptr = NULL;
+		//}
+		runState = ROT_ERROR;
+		goto end;
+	}
+
+	if(m_uwDebug & 4)
+	{
+		CVisImage roi(dstRoi);
+		writeLog("\n");
+		writeLog("Source Image ROI RTS\n");
+		if(roi.Width()>JPG_SIZE_LIMITATION||roi.Height()>JPG_SIZE_LIMITATION)
+			_snprintf(pathname, FILENAME_MAX_LENGTH, "%s\\LOG%05uEdge\\LOG%05uEdgeROI_RTS.bmp", m_strDebugPath, ulEdgeSearchLogIndex, ulEdgeSearchLogIndex);
+		else
+			_snprintf(pathname, FILENAME_MAX_LENGTH, "%s\\LOG%05uEdge\\LOG%05uEdgeROI_RTS.jpg", m_strDebugPath, ulEdgeSearchLogIndex, ulEdgeSearchLogIndex);
+		roi.WriteImage(pathname);
+		p = strrchr(pathname, '\\')-12;
+		HL_InsertImage(m_pHtmlLog, p);
+		writeLog("\n");
+	}
+	if (m_uwDebug & ALIGN_DEBUG_TIME)
+	{
+		debug_clock.Click("RTS");
+	}
+	if (m_dGaussKerWidth > dstRoi.size.width || m_dGaussKerHeight > dstRoi.size.height
+		|| m_dGaussKerWidth < 0 || m_dGaussKerHeight < 0 || m_iGradKernal >= dstRoi.size.width || m_iGradKernal < 0)
+	{
+		//if (dstRoi.ptr)
+		//{
+		//	delete[]dstRoi.ptr;
+		//	dstRoi.ptr = NULL;
+		//}
+		runState = GAUSSKER_ERROR;
+		goto end;
+	}
+	if (m_iGradKernal != 0)
+	{
+		iGradKernal = (int)(m_iGradKernal / 2) * 2 + 1;
+		iGradKernal /= 2;
+	}
+	
+	//gaussian filter
+	IMG_UBYTE *pGauss;
+	pGauss = NULL;
+	if (m_dGaussKerWidth > 0 && m_dGaussKerHeight > 0 && m_dGaussSigmaWidth > 0 && m_dGaussSigmaHeight > 0)
+	{
+		pGauss = (IMG_UBYTE *)pool.Malloc((size_t)dstRoi.size.width * dstRoi.size.height);
+		if (pGauss == nullptr)
+		{
+			THROW_VIS_EXCEPTION(MEM_ERR_MALLOC);
+		}
+		if (dstRoi.size.height == 1)
+		{
+			runState = GaussianFilter_dim1_fixed(dstRoi.ptr, roiSize.width, m_dGaussSigmaWidth, m_dGaussKerWidth, pGauss);
+		}
+		else
+		{
+			runState = GaussianFilter_2D(dstRoi.ptr,
+				roiSize.width, roiSize.height,
+				m_dGaussKerWidth, m_dGaussKerHeight,
+				m_dGaussSigmaWidth, m_dGaussSigmaHeight, pGauss);
+		}
+		
+		if (runState != 0)
+		{
+			//if (dstRoi.ptr)
+			//{
+			//	delete[]dstRoi.ptr;
+			//	dstRoi.ptr = NULL;
+			//}
+			//if (pGauss)
+			//{
+			//	delete[]pGauss;
+			//	pGauss = NULL;
+			//}
+			runState = GAUSSFUN_ERROR;
+			goto end;
+		}
+		memcpy(dstRoi.ptr, pGauss, (size_t)roiSize.width * roiSize.height * sizeof(unsigned char));
+		//if (pGauss)
+		//{
+		//	delete[]pGauss;
+		//	pGauss = NULL;
+		//}
+		if(m_uwDebug & 4)
+		{
+			CVisImage roi(dstRoi);
+			writeLog("after Gaussian filter\n");
+			if(roi.Width()>JPG_SIZE_LIMITATION||roi.Height()>JPG_SIZE_LIMITATION)
+				_snprintf(pathname, FILENAME_MAX_LENGTH, "%s\\LOG%05uEdge\\LOG%05uEdgeGauss.bmp", m_strDebugPath, ulEdgeSearchLogIndex, ulEdgeSearchLogIndex);
+			else
+				_snprintf(pathname, FILENAME_MAX_LENGTH, "%s\\LOG%05uEdge\\LOG%05uEdgeGauss.jpg", m_strDebugPath, ulEdgeSearchLogIndex, ulEdgeSearchLogIndex);
+			roi.WriteImage(pathname);
+			p = strrchr(pathname, '\\')-12;
+			HL_InsertImage(m_pHtmlLog, p);
+			writeLog("\n");
+		}
+	}
+	
+	//plot grayMean profile
+	dstRoiProj.linestep = roiSize.width * sizeof(IMG_REAL);
+	dstRoiProj.size.width = roiSize.width;
+	dstRoiProj.size.height = 1;
+	dstRoiProj.ptr = (IMG_REAL *)pool.Malloc((size_t)dstRoiProj.size.width*sizeof(IMG_REAL));
+	if (dstRoiProj.ptr == nullptr)
+	{
+		THROW_VIS_EXCEPTION(MEM_ERR_MALLOC);
+	}
+	if (m_iOption == FindEdgeOption::OPTION_MEDIAN_TANDIR)
+	{
+		Plot_Horizontal_Profile_Median(dstRoi, dstRoiProj);
+		if(m_uwDebug & ALIGN_DEBUG_NORMAL)writeLog("Edge apply median filter in normal direction");
+	}
+	else
+	{
+		Plot_Horizontal_Profile(dstRoi, dstRoiProj);
+		if(m_uwDebug & ALIGN_DEBUG_NORMAL)writeLog("Edge apply average filter in normal direction");
+	}
+	if(m_uwDebug & 4)
+	{
+		CVisImage canvas;
+		DrawChat(&dstRoiProj, canvas);
+		writeLog("\n");
+		writeLog("Source Image Normal direction projection\n");
+		_snprintf(pathname, FILENAME_MAX_LENGTH, "%s\\LOG%05uEdge\\LOG%05uEdgeProj.png", m_strDebugPath, ulEdgeSearchLogIndex, ulEdgeSearchLogIndex);
+		canvas.WriteImage(pathname);
+		p = strrchr(pathname, '\\')-12;
+		HL_InsertImage(m_pHtmlLog, p);
+	}
+	// compute gradient
+	dstRoiGrad.linestep = roiSize.width * sizeof(IMG_REAL);
+	dstRoiGrad.size.width = roiSize.width;
+	dstRoiGrad.size.height = 1;
+	dstRoiGrad.ptr = (IMG_REAL *)pool.Malloc(dstRoiGrad.size.width * sizeof(IMG_REAL));
+	if (dstRoiGrad.ptr == nullptr)
+	{
+		THROW_VIS_EXCEPTION(MEM_ERR_MALLOC);
+	}
+	memcpy(dstRoiGrad.ptr, dstRoiProj.ptr, dstRoiGrad.size.width * sizeof(IMG_REAL));
+	Plot_Gradient_Profile(dstRoiProj, dstRoiGrad, iGradKernal);
+	if (m_uwDebug & 4)
+	{
+		CVisImage canvas;
+		DrawChat(&dstRoiGrad, canvas);
+		writeLog("\n");
+		writeLog("Gradiant data\n");
+		_snprintf(pathname, FILENAME_MAX_LENGTH, "%s\\LOG%05uEdge\\LOG%05uEdgeGrad.png", m_strDebugPath, ulEdgeSearchLogIndex, ulEdgeSearchLogIndex);
+		canvas.WriteImage(pathname);
+		p = strrchr(pathname, '\\') - 12;
+		HL_InsertImage(m_pHtmlLog, p);
+		writeLog("\n");
+	}
+	if (m_uwDebug & ALIGN_DEBUG_TIME)
+	{
+		debug_clock.Click("Gradient");
+	}
+	/*if (dstRoiProj.ptr)
+	{
+		delete[]dstRoiProj.ptr;
+		dstRoiProj.ptr = NULL;
+	}*/
+
+	// find edge Pts
+	/*vector<IMG_RCOORD>EdgePts;
+	EdgePts.clear();*/
+	IMG_RCOORD *pEdgePts = nullptr; int ptNums = 0;
+	IMG_REAL *magnitude = nullptr;
+	pEdgePts = (IMG_RCOORD *)pool.Malloc(dstRoiProj.size.width * sizeof(IMG_RCOORD));
+	if (pEdgePts == nullptr)
+	{
+		THROW_VIS_EXCEPTION(MEM_ERR_MALLOC);
+	}
+	magnitude = (IMG_REAL *)pool.Malloc(dstRoiProj.size.width * sizeof(IMG_REAL));
+	if (magnitude == nullptr)
+	{
+		THROW_VIS_EXCEPTION(MEM_ERR_MALLOC);
+	}
+	if (m_gradMethod == GradMethod::EDGE_RISING)
+	{
+		if (m_uwDebug)writeLog("Looking for rising edge\n");
+		FindRisingEdge(dstRoiProj, dstRoiGrad, m_iMinGrad, pEdgePts, magnitude, ptNums);
+	}
+	else
+	{
+		if (m_uwDebug)writeLog("Looking for max peak edge\n");
+		FindGravityPeak(dstRoiGrad, m_iMinGrad, pEdgePts, magnitude, ptNums, iGradKernal);
+	}
+	if (m_uwDebug & 4)
+	{
+		CVisImage canvas;
+		DrawChat(&dstRoiGrad, canvas, ptNums, pEdgePts);
+		writeLog("\n");
+		writeLog("Edge Candidate\n");
+		_snprintf(pathname, FILENAME_MAX_LENGTH, "%s\\LOG%05uEdge\\LOG%05uEdgeCandidate.png", m_strDebugPath, ulEdgeSearchLogIndex, ulEdgeSearchLogIndex);
+		canvas.WriteImage(pathname);
+		p = strrchr(pathname, '\\') - 12;
+		HL_InsertImage(m_pHtmlLog, p);
+		writeLog("\n");
+	}
+	if (m_uwDebug & 4)
+		OutputEdgeTable(pEdgePts, magnitude, nullptr, ptNums,  "After Edge extract");
+	
+	if (ptNums == 0)
+	{
+		//if (dstRoiGrad.ptr)
+		//{
+		//	delete[]dstRoiGrad.ptr;
+		//	dstRoiGrad.ptr = NULL;
+		//}
+		//if (dstRoi.ptr)
+		//{
+		//	delete[]dstRoi.ptr;
+		//	dstRoi.ptr = NULL;
+		//}
+		//if (dstRoiProj.ptr)
+		//{
+		//	delete[]dstRoiProj.ptr;
+		//	dstRoiProj.ptr = NULL;
+		//}
+		//if (pEdgePts)
+		//{
+		//	delete[]pEdgePts;
+		//	pEdgePts = NULL;
+		//}
+		if (m_uwDebug & 4)
+		{
+			writeLog("No Edge\n");
+			writeLog("\n");
+		}
+
+		runState  = NOEDGE;
+		goto end;
+	}
+	
+
+	// judge out of boundary
+	IMG_RCOORD tempPt;
+	for (int i = 0; i < ptNums; i++)
+	{
+		ROI_ROTATION_COORDINATE_COMPUTE_IN_SOURCEIMAG_SL(roiStruct.RotationAngle, roiStruct.SrcCenterCo, roiStruct.DstCenterCo,
+			pEdgePts[i], tempPt);
+		if (tempPt.x<1 || tempPt.x>mImage.size.width - 2 || tempPt.y<1 || tempPt.y>mImage.size.height - 2)
+		{
+			for (int j = i;j  + 1 < ptNums;j++)
+			{
+				pEdgePts[j] = pEdgePts[j + 1];
+			}
+			ptNums--;
+			i--;
+			continue;
+		}
+		if (mMask.ptr)
+		{
+			if (0 == mMask.ptr[(int)tempPt.y*(size_t)mMask.linestep + (int)tempPt.x])
+			{
+				for (int j = i; j + 1 < ptNums; j++)
+				{
+					pEdgePts[j] = pEdgePts[j + 1];
+				}
+				ptNums--;
+				i--;
+			}
+		}
+	}
+	if (m_uwDebug & 4)
+		OutputEdgeTable(pEdgePts, magnitude, nullptr, ptNums, "After Edge mask select");
+	if (m_uwDebug & ALIGN_DEBUG_TIME)
+	{
+		debug_clock.Click("Edge");
+	}
+	if (ptNums <= 0)
+	{
+		//if (dstRoiGrad.ptr)
+		//{
+		//	delete[]dstRoiGrad.ptr;
+		//	dstRoiGrad.ptr = NULL;
+		//}
+		//if (dstRoi.ptr)
+		//{
+		//	delete[]dstRoi.ptr;
+		//	dstRoi.ptr = NULL;
+		//}
+		//if (dstRoiProj.ptr)
+		//{
+		//	delete[]dstRoiProj.ptr;
+		//	dstRoiProj.ptr = NULL;
+		//}
+		//if (pEdgePts)
+		//{
+		//	delete[]pEdgePts;
+		//	pEdgePts = nullptr;
+		//}
+		if (m_uwDebug & 4)
+		{
+			writeLog("All edge removed by mask\n");
+			writeLog("\n");
+		}
+		runState = OUTFOUND;
+		goto end;
+	}
+
+	// give edge type
+	EDGETYPE *edgeDirTemp = (EDGETYPE *)pool.Malloc(sizeof(EDGETYPE)*ptNums);
+	if (edgeDirTemp == nullptr)
+	{
+		THROW_VIS_EXCEPTION(MEM_ERR_MALLOC);
+	}
+	if (m_gradMethod != GradMethod::EDGE_RISING)
+		FittingGraPoints(dstRoiGrad, pEdgePts, ptNums, m_gradMethod, dstRoiProj);
+	if (iGradKernal == 0)
+	{
+		for (int i = 0; i < ptNums; i++)
+		{
+			if (pEdgePts[i].x - 0.0 < 1e-6&&pEdgePts[i].y - 0.0 < 1e-6)
+			{
+				continue;
+			}
+			pEdgePts[i].x += 0.5;
+		}
+	}
+	if (m_uwDebug & 4)
+		OutputEdgeTable(pEdgePts, magnitude, nullptr, ptNums,  "After Edge refine");
+
+	// compute coor in srcIMG
+	EdgePts.clear(); EdgeSrcPts.clear();
+	for (int i = 0; i < ptNums; i++)
+	{
+		if (pEdgePts[i].x - 0.0 < 1e-6&&pEdgePts[i].y - 0.0 < 1e-6)
+		{
+			continue;
+		}
+		int _x = pEdgePts[i].x;
+		float _gradient = dstRoiGrad.ptr[_x];
+		if (_gradient > 0)
+		{
+			pEdgePts[i].x = pEdgePts[i].x + m_fOffset;   // pixel dack to light add offset
+		}
+		else
+		{
+			pEdgePts[i].x = pEdgePts[i].x - m_fOffset;   // pixel light to dack add offset
+		}
+		ROI_ROTATION_COORDINATE_COMPUTE_IN_SOURCEIMAG_SL(roiStruct.RotationAngle, roiStruct.SrcCenterCo, roiStruct.DstCenterCo,
+			pEdgePts[i], tempPt);
+		EdgePts.push_back(tempPt);
+		EdgeSrcPts.push_back(pEdgePts[i]);
+		EdgeMag.push_back(magnitude[i]);
+		//if (magnitude[i] != _gradient)
+		//{
+		//	throw(0);
+		//}
+
+	}
+	if (m_uwDebug & 4)
+		OutputEdgeTable(EdgePts, magnitude, nullptr,  "After Edge translate");
+	if (m_uwDebug & ALIGN_DEBUG_TIME)
+	{
+		debug_clock.Click("Dir_Mag");
+	}
+	int finalPtNums = EdgePts.size();
+	for (int i = 0; i < finalPtNums; i++)
+	{
+		int _x = EdgeSrcPts[i].x;
+		float _gradient = dstRoiGrad.ptr[_x];
+		if (_gradient > 0)
+		{
+			edgeDirTemp[i] = EDGETYPE::DARK2LIGHT;
+		}
+		else
+		{
+			edgeDirTemp[i] = EDGETYPE::LIGHT2DARK;
+		}
+	}
+	//if (pEdgePts)
+	//{
+	//	delete[]pEdgePts; 
+	//	pEdgePts = nullptr;
+	//}
+	
+	// final select
+	bool flag = false;
+	IMG_REAL mag;
+	//第一个边缘点
+	if (m_edgeSelect == EdgePriorSelect::FIRST)
+	{
+		switch (m_edgeDir)
+		{
+		case EDGETYPE::ANY:
+		case EDGETYPE::BOTH:
+			tempPt.x = EdgePts[0].x;
+			tempPt.y = EdgePts[0].y;
+			EdgePts.clear();
+			EdgePts.push_back(tempPt);
+			mag = EdgeMag[0];
+			EdgeMag.clear();
+			EdgeMag.push_back(mag);
+			flag = true;
+			break;
+		case EDGETYPE::LIGHT2DARK:
+			for (int i = 0; i < finalPtNums; i++)
+			{
+				if (edgeDirTemp[i] == EDGETYPE::LIGHT2DARK)
+				{
+					tempPt.x = EdgePts[i].x;
+					tempPt.y = EdgePts[i].y;
+					EdgePts.clear();
+					EdgePts.push_back(tempPt);
+					mag = EdgeMag[i];
+					EdgeMag.clear();
+					EdgeMag.push_back(mag);
+					flag = true;
+					break;
+				}
+			}
+			break;
+		case EDGETYPE::DARK2LIGHT:
+			for (int i = 0; i < finalPtNums; i++)
+			{
+				if (edgeDirTemp[i] == EDGETYPE::DARK2LIGHT)
+				{
+					tempPt.x = EdgePts[i].x;
+					tempPt.y = EdgePts[i].y;
+					EdgePts.clear();
+					EdgePts.push_back(tempPt);
+					mag = EdgeMag[i];
+					EdgeMag.clear();
+					EdgeMag.push_back(mag);
+					flag = true;
+					break;
+				}
+			}
+			break;
+		case EDGETYPE::WHITECENTER:
+			if (finalPtNums > 1)
+			{
+				for (int i = 0; i < finalPtNums - 1; i++)
+				{
+					if (edgeDirTemp[i] == EDGETYPE::DARK2LIGHT && edgeDirTemp[i + 1] == EDGETYPE::LIGHT2DARK)
+					{
+						if (m_MaxBlackWhiteCenterWidth < 0 || ((ALIGN_DIST(EdgePts[i+1],EdgePts[i]) < m_MaxBlackWhiteCenterWidth)&&
+							(ALIGN_DIST(EdgePts[i + 1], EdgePts[i]) > m_MinBlackWhiteCenterWidth)))
+						{
+
+							tempPt.x = (EdgePts[i].x + EdgePts[i + 1].x) / 2;
+							tempPt.y = (EdgePts[i].y + EdgePts[i + 1].y) / 2;
+							vPoint1.push_back(EdgePts[i]);
+							vPoint2.push_back(EdgePts[i + 1]);
+							EdgePts.clear();
+							EdgePts.push_back(tempPt);
+							mag = (EdgeMag[i] + EdgeMag[i + 1]) / 2;
+							EdgeMag.clear();
+							EdgeMag.push_back(mag);
+							flag = true;
+							break;
+						}
+						else if (m_uwDebug & 4)
+						{
+							writeLog("No %d edge reject by line width constrain", i);
+						}
+					}
+				}
+			}
+			else
+			{
+				EdgePts.clear();
+			}
+			break;
+		case EDGETYPE::BLACKCENTER:
+			if (finalPtNums > 1)
+			{
+				for (int i = 0; i < finalPtNums - 1; i++)
+				{
+					if (edgeDirTemp[i] == EDGETYPE::LIGHT2DARK && edgeDirTemp[i + 1] == EDGETYPE::DARK2LIGHT)
+					{
+						if (m_MaxBlackWhiteCenterWidth < 0 || (ALIGN_DIST(EdgePts[i + 1], EdgePts[i])  < m_MaxBlackWhiteCenterWidth) &&
+							(ALIGN_DIST(EdgePts[i + 1], EdgePts[i]) > m_MinBlackWhiteCenterWidth))
+						{
+							tempPt.x = (EdgePts[i].x + EdgePts[i + 1].x) / 2;
+							tempPt.y = (EdgePts[i].y + EdgePts[i + 1].y) / 2;
+							vPoint1.push_back(EdgePts[i]);
+							vPoint2.push_back(EdgePts[i + 1]);
+							EdgePts.clear();
+							EdgePts.push_back(tempPt);
+							mag = (EdgeMag[i] + EdgeMag[i + 1]) / 2;
+							EdgeMag.clear();
+							EdgeMag.push_back(mag);
+							flag = true;
+							break;
+						}
+						else if (m_uwDebug & 4)
+						{
+							writeLog("No %d edge reject by line width constrain", i);
+						}
+					}
+				}
+			}
+			else
+			{
+				EdgePts.clear();
+			}
+			break;
+		default:
+			runState = SELECT_ERROR;
+			break;
+		}
+		/*if (flag == false)
+			runState = SELECT_ERROR;*/
+
+	}
+	//最强边缘点
+	else if (m_edgeSelect == EdgePriorSelect::BEST)
+	{
+		int maxPtIndex = 0;
+		double maxStrenth = 0;
+		switch (m_edgeDir)
+		{
+		case EDGETYPE::ANY:
+		case EDGETYPE::BOTH:
+			for (int i = 0; i < finalPtNums; i++)
+			{
+				if (abs(dstRoiGrad.ptr[(int)EdgeSrcPts[i].x]) > maxStrenth)
+				{
+					maxStrenth = abs(dstRoiGrad.ptr[(int)EdgeSrcPts[i].x]);
+					maxPtIndex = i;
+					flag = true;
+				}
+			}
+			if (flag)
+			{
+				tempPt.x = EdgePts[maxPtIndex].x;
+				tempPt.y = EdgePts[maxPtIndex].y;
+				EdgePts.clear();
+				EdgePts.push_back(tempPt);
+				EdgeMag.clear();
+				EdgeMag.push_back(maxStrenth);
+			}
+			else
+			{
+				runState = SELECT_ERROR;
+			}
+			break;
+		case EDGETYPE::LIGHT2DARK:
+			for (int i = 0; i < finalPtNums; i++)
+			{
+				if (abs(dstRoiGrad.ptr[(int)EdgeSrcPts[i].x]) > maxStrenth && edgeDirTemp[i] == EDGETYPE::LIGHT2DARK)
+				{
+					maxStrenth = abs(dstRoiGrad.ptr[(int)EdgeSrcPts[i].x]);
+					maxPtIndex = i;
+					flag = true;
+				}
+			}
+			if (flag)
+			{
+				tempPt.x = EdgePts[maxPtIndex].x;
+				tempPt.y = EdgePts[maxPtIndex].y;
+				EdgePts.clear();
+				EdgePts.push_back(tempPt);
+				EdgeMag.clear();
+				EdgeMag.push_back(maxStrenth);
+			}
+			else
+			{
+				runState = SELECT_ERROR;
+			}
+			break;
+		case EDGETYPE::DARK2LIGHT:
+			for (int i = 0; i < finalPtNums; i++)
+			{
+				if (abs(dstRoiGrad.ptr[(int)EdgeSrcPts[i].x]) > maxStrenth && edgeDirTemp[i] == EDGETYPE::DARK2LIGHT)
+				{
+					maxStrenth = abs(dstRoiGrad.ptr[(int)EdgeSrcPts[i].x]);
+					maxPtIndex = i;
+					flag = true;
+				}
+				else if (m_uwDebug & 4)
+				{
+					writeLog("No %d edge reject by edge mag", i);
+				}
+			}
+			if (flag)
+			{
+				tempPt.x = EdgePts[maxPtIndex].x;
+				tempPt.y = EdgePts[maxPtIndex].y;
+				EdgePts.clear();
+				EdgePts.push_back(tempPt);
+				EdgeMag.clear();
+				EdgeMag.push_back(maxStrenth);
+			}
+			else
+			{
+				runState = SELECT_ERROR;
+			}
+			break;
+		case EDGETYPE::WHITECENTER: {
+			if (finalPtNums > 1)
+			{
+				for (int i = 0; i < finalPtNums - 1; i++)
+				{
+					if (abs(dstRoiGrad.ptr[(int)EdgeSrcPts[i].x]) > maxStrenth
+						&& edgeDirTemp[i] == EDGETYPE::DARK2LIGHT && edgeDirTemp[i + 1] == EDGETYPE::LIGHT2DARK)
+					{
+						if (m_MaxBlackWhiteCenterWidth < 0 || (ALIGN_DIST(EdgePts[i + 1], EdgePts[i]) < m_MaxBlackWhiteCenterWidth) &&
+							(ALIGN_DIST(EdgePts[i + 1], EdgePts[i]) > m_MinBlackWhiteCenterWidth))
+						{
+							maxStrenth = abs(dstRoiGrad.ptr[(int)EdgeSrcPts[i].x]);
+							maxPtIndex = i;
+							flag = true;
+						}
+						else if (m_uwDebug & 4)
+						{
+							writeLog("No %d edge reject by line width constrain", i);
+						}
+					}
+				}
+			}
+			else
+			{
+				EdgePts.clear();
+			}
+			if (flag)
+			{
+				tempPt.x = (EdgePts[maxPtIndex].x + EdgePts[maxPtIndex + 1].x) / 2;
+				tempPt.y = (EdgePts[maxPtIndex].y + EdgePts[maxPtIndex + 1].y) / 2;
+				vPoint1.push_back(EdgePts[maxPtIndex]);
+				vPoint2.push_back(EdgePts[maxPtIndex + 1]);
+				EdgePts.clear();
+				EdgePts.push_back(tempPt);
+				EdgeMag.clear();
+				EdgeMag.push_back(maxStrenth);
+			}
+			else
+			{
+				runState = SELECT_ERROR;
+			}
+			break;
+		}
+		case EDGETYPE::BLACKCENTER: {
+			for (int i = 0; i < finalPtNums - 1; i++)
+			{
+				if (abs(dstRoiGrad.ptr[(int)EdgeSrcPts[i].x]) > maxStrenth
+					&& edgeDirTemp[i] == EDGETYPE::LIGHT2DARK && edgeDirTemp[i + 1] == EDGETYPE::DARK2LIGHT)
+				{
+					if (m_MaxBlackWhiteCenterWidth < 0 || (ALIGN_DIST(EdgePts[i + 1], EdgePts[i]) < m_MaxBlackWhiteCenterWidth) &&
+						(ALIGN_DIST(EdgePts[i + 1], EdgePts[i]) > m_MinBlackWhiteCenterWidth))
+					{
+						maxStrenth = abs(dstRoiGrad.ptr[(int)EdgeSrcPts[i].x]);
+						maxPtIndex = i;
+						flag = true;
+					}
+					else if (m_uwDebug & 4)
+					{
+						writeLog("No %d edge reject by line width constrain", i);
+					}
+				}
+			}
+			if (flag)
+			{
+				tempPt.x = (EdgePts[maxPtIndex].x + EdgePts[maxPtIndex + 1].x) / 2;
+				tempPt.y = (EdgePts[maxPtIndex].y + EdgePts[maxPtIndex + 1].y) / 2;
+				vPoint1.push_back(EdgePts[maxPtIndex]);
+				vPoint2.push_back(EdgePts[maxPtIndex + 1]);
+				EdgePts.clear();
+				EdgePts.push_back(tempPt);
+				EdgeMag.clear();
+				EdgeMag.push_back(maxStrenth);
+			}
+			else
+			{
+				runState = SELECT_ERROR;
+			}
+			break;
+		}
+		default:
+			runState = SELECT_ERROR;
+			break;
+		}
+	}
+	else if (m_edgeSelect == EdgePriorSelect::ALL)
+	{
+		switch (m_edgeDir)
+		{
+		case EDGETYPE::ANY:
+		case EDGETYPE::BOTH:
+			flag = true;
+			break;
+		case EDGETYPE::LIGHT2DARK: {
+			vector <IMG_RCOORD> edgecoor;
+			vector <IMG_REAL> edgemag;
+			edgecoor.clear();
+			for (int i = 0; i < finalPtNums; i++)
+			{
+				if (edgeDirTemp[i] == EDGETYPE::LIGHT2DARK)
+				{
+					flag = true;
+					edgecoor.push_back(EdgePts[i]);
+					edgemag.push_back(EdgeMag[i]);
+				}
+			}
+			EdgePts.clear();
+			EdgePts = edgecoor;
+			edgecoor.clear();
+			EdgeMag.clear();
+			EdgeMag = edgemag;
+			edgemag.clear();
+			if (EdgePts.size() == 0)
+			{
+				runState = SELECT_ERROR;
+			}
+			break;
+		}
+		case EDGETYPE::DARK2LIGHT: {
+			vector <IMG_RCOORD> edgecoor;
+			vector <IMG_REAL> edgemag;
+			for (int i = 0; i < finalPtNums; i++)
+			{
+				if (edgeDirTemp[i] == EDGETYPE::DARK2LIGHT)
+				{
+					flag = true;
+					edgecoor.push_back(EdgePts[i]);
+					edgemag.push_back(EdgeMag[i]);
+				}
+			}
+			EdgePts.clear();
+			EdgePts = edgecoor;
+			edgecoor.clear();
+			EdgeMag.clear();
+			EdgeMag = edgemag;
+			edgemag.clear();
+			if (EdgePts.size() == 0)
+			{
+				runState = SELECT_ERROR;
+			}
+			break;
+		}
+		case EDGETYPE::WHITECENTER: {
+			vector <IMG_RCOORD> edgecoor;
+			vector <IMG_REAL> edgemag;
+			edgecoor.clear();
+			if (finalPtNums > 1)
+			{
+				for (int i = 0; i < finalPtNums - 1; i++)
+				{
+					if (edgeDirTemp[i] == EDGETYPE::DARK2LIGHT && edgeDirTemp[i + 1] == EDGETYPE::LIGHT2DARK)
+					{
+						if (m_MaxBlackWhiteCenterWidth < 0 || (ALIGN_DIST(EdgePts[i + 1], EdgePts[i]) < m_MaxBlackWhiteCenterWidth) &&
+							(ALIGN_DIST(EdgePts[i + 1], EdgePts[i]) > m_MinBlackWhiteCenterWidth))
+						{
+							flag = true;
+							tempPt.x = (EdgePts[i].x + EdgePts[i + 1].x) / 2.0;
+							tempPt.y = (EdgePts[i].y + EdgePts[i + 1].y) / 2.0;
+							vPoint1.push_back(EdgePts[i]);
+							vPoint2.push_back(EdgePts[i + 1]);
+							edgecoor.push_back(tempPt);
+							edgemag.push_back(EdgeMag[i]);
+						}
+						else if (m_uwDebug & 4)
+						{
+							writeLog("No %d edge reject by line width constrain", i);
+						}
+					}
+				}
+				EdgePts.clear();
+				EdgePts = edgecoor;
+				edgecoor.clear();
+				EdgeMag.clear();
+				EdgeMag = edgemag;
+				edgemag.clear();
+				if (EdgePts.size() == 0)
+				{
+					runState = SELECT_ERROR;
+				}
+			}
+			else
+			{
+				EdgePts.clear();
+			}
+			break;
+		}
+		case EDGETYPE::BLACKCENTER: {
+			vector <IMG_RCOORD> edgecoor;
+			vector <IMG_REAL> edgemag;
+			edgecoor.clear();
+			if (finalPtNums > 1)
+			{
+				for (int i = 0; i < finalPtNums - 1; i++)
+				{
+					if (edgeDirTemp[i] == EDGETYPE::LIGHT2DARK && edgeDirTemp[i + 1] == EDGETYPE::DARK2LIGHT)
+					{
+						if (m_MaxBlackWhiteCenterWidth < 0 || (ALIGN_DIST(EdgePts[i + 1], EdgePts[i]) < m_MaxBlackWhiteCenterWidth) &&
+							(ALIGN_DIST(EdgePts[i + 1], EdgePts[i]) > m_MinBlackWhiteCenterWidth))
+						{
+							flag = true;
+							tempPt.x = (EdgePts[i].x + EdgePts[i + 1].x) / 2.0;
+							tempPt.y = (EdgePts[i].y + EdgePts[i + 1].y) / 2.0;
+							vPoint1.push_back(EdgePts[i]);
+							vPoint2.push_back(EdgePts[i + 1]);
+							edgecoor.push_back(tempPt);
+							edgemag.push_back(EdgeMag[i]);
+						}
+						else if (m_uwDebug & 4)
+						{
+							writeLog("No %d edge reject by line width constrain", i);
+						}
+					}
+				}
+				EdgePts.clear();
+				EdgePts = edgecoor;
+				edgecoor.clear();
+				EdgeMag.clear();
+				EdgeMag = edgemag;
+				edgemag.clear();
+				if (EdgePts.size() == 0)
+				{
+					runState = SELECT_ERROR;
+				}
+			}
+			else
+			{
+				EdgePts.clear();
+			}
+			break;
+		}
+		default:
+			runState = SELECT_ERROR;
+			break;
+		}
+	/*	if (flag == false)
+			runState = SELECT_ERROR;*/
+	}
+
+	else
+	{
+		switch (m_edgeDir)
+		{
+		case EDGETYPE::ANY:
+		case EDGETYPE::BOTH:
+		{
+			flag = true;
+			IMG_RCOORD *pTempCoor = (IMG_RCOORD *)pool.Malloc(sizeof(IMG_RCOORD)*finalPtNums);
+			int indexI = 0;
+			for (int i = 0; i < finalPtNums; i++)
+			{
+				pTempCoor[i].x = EdgePts[i].x;
+				pTempCoor[i].y = EdgePts[i].y;
+			}
+			SearchNearCentPoint(pTempCoor, finalPtNums, m_lineStart, m_lineEnd, indexI);
+			tempPt = EdgePts[indexI];
+			EdgePts.clear();
+			EdgePts.push_back(tempPt);
+			mag = EdgeMag[indexI];
+			EdgeMag.clear();
+			EdgeMag.push_back(mag);
+			break;
+		}
+		case EDGETYPE::LIGHT2DARK: {
+			flag = true;
+			IMG_RCOORD *pTempCoor = (IMG_RCOORD *)pool.Malloc(sizeof(IMG_RCOORD)*finalPtNums);;
+			int indexI = 0;
+			vector <IMG_RCOORD> edgecoor;
+			vector <IMG_REAL> edgemag;
+			edgecoor.clear();
+			for (int i = 0; i < finalPtNums; i++)
+			{
+				if (edgeDirTemp[i] == EDGETYPE::LIGHT2DARK)
+				{
+					edgecoor.push_back(EdgePts[i]);
+					edgemag.push_back(EdgeMag[i]);
+				}
+			}
+			EdgePts.clear();
+			EdgePts = edgecoor;
+			edgecoor.clear();
+			EdgeMag = edgemag;
+			edgemag.clear();
+			if (EdgePts.size() == 0)
+			{
+				runState = SELECT_ERROR;
+				break;
+			}
+			finalPtNums = EdgePts.size();
+			for (int i = 0; i < finalPtNums; i++)
+			{
+				pTempCoor[i] = EdgePts[i];
+			}
+			SearchNearCentPoint(pTempCoor, finalPtNums, m_lineStart, m_lineEnd, indexI);
+			tempPt = EdgePts[indexI];
+			EdgePts.clear();
+			EdgePts.push_back(tempPt);
+			mag = EdgeMag[indexI];
+			EdgeMag.clear();
+			EdgeMag.push_back(mag);
+			break;
+		}
+		case EDGETYPE::DARK2LIGHT: {
+			flag = true;
+			IMG_RCOORD *pTempCoor = (IMG_RCOORD *)pool.Malloc(sizeof(IMG_RCOORD)*finalPtNums);;
+			int indexI = 0;
+			vector <IMG_RCOORD> edgecoor;
+			vector <IMG_REAL> edgemag;
+			for (int i = 0; i < finalPtNums; i++)
+			{
+				if (edgeDirTemp[i] == EDGETYPE::DARK2LIGHT)
+				{
+					edgecoor.push_back(EdgePts[i]);
+					edgemag.push_back(EdgeMag[i]);
+				}
+			}
+			EdgePts.clear();
+			EdgePts = edgecoor;
+			edgecoor.clear();
+			EdgeMag = edgemag;
+			edgemag.clear();
+
+			if (EdgePts.size() == 0)
+			{
+				runState = SELECT_ERROR;
+				break;
+			}
+			finalPtNums = EdgePts.size();
+			for (int i = 0; i < finalPtNums; i++)
+			{
+				pTempCoor[i] = EdgePts[i];
+			}
+			SearchNearCentPoint(pTempCoor, finalPtNums, m_lineStart, m_lineEnd, indexI);
+			tempPt = EdgePts[indexI];
+			EdgePts.clear();
+			EdgePts.push_back(tempPt);
+			mag = EdgeMag[indexI];
+			EdgeMag.clear();
+			EdgeMag.push_back(mag);
+			break;
+		}
+		case EDGETYPE::WHITECENTER: {
+			flag = true;
+			IMG_RCOORD *pTempCoor = (IMG_RCOORD *)pool.Malloc(sizeof(IMG_RCOORD)*finalPtNums);;
+			int indexI = 0;
+			vector <IMG_RCOORD> edgecoor;
+			vector <IMG_REAL> edgemag;
+			edgecoor.clear();
+			if (finalPtNums > 1)
+			{
+				for (int i = 0; i < finalPtNums - 1; i++)
+				{
+					if (edgeDirTemp[i] == EDGETYPE::DARK2LIGHT && edgeDirTemp[i + 1] == EDGETYPE::LIGHT2DARK)
+					{
+						if (m_MaxBlackWhiteCenterWidth < 0 || (ALIGN_DIST(EdgePts[i + 1], EdgePts[i]) < m_MaxBlackWhiteCenterWidth) &&
+							(ALIGN_DIST(EdgePts[i + 1], EdgePts[i]) > m_MinBlackWhiteCenterWidth))
+						{
+							tempPt.x = (EdgePts[i].x + EdgePts[i + 1].x) / 2.0;
+							tempPt.y = (EdgePts[i].y + EdgePts[i + 1].y) / 2.0;
+							vPoint1.push_back(EdgePts[i]);
+							vPoint2.push_back(EdgePts[i + 1]);
+							edgecoor.push_back(tempPt);
+							edgemag.push_back(EdgeMag[i]);
+						}
+						else if (m_uwDebug & 4)
+						{
+							writeLog("No %d edge reject by line width constrain", i);
+						}
+					}
+				}
+				EdgePts.clear();
+				EdgePts = edgecoor;
+				edgecoor.clear();
+				EdgeMag = edgemag;
+				edgemag.clear();
+				if (EdgePts.size() == 0)
+				{
+					runState = SELECT_ERROR;
+					break;
+				}
+				finalPtNums = EdgePts.size();
+				for (int i = 0; i < finalPtNums; i++)
+				{
+					pTempCoor[i] = EdgePts[i];
+				}
+				SearchNearCentPoint(pTempCoor, finalPtNums, m_lineStart, m_lineEnd, indexI);
+				tempPt = EdgePts[indexI];
+				EdgePts.clear();
+				EdgePts.push_back(tempPt);
+				mag = EdgeMag[indexI];
+				EdgeMag.clear();
+				EdgeMag.push_back(mag);
+			}
+			else
+			{
+				EdgePts.clear();
+			}
+			break;
+		}
+		case EDGETYPE::BLACKCENTER: {
+			flag = true;
+			IMG_RCOORD *pTempCoor = (IMG_RCOORD *)pool.Malloc(sizeof(IMG_RCOORD)*finalPtNums);;
+			int indexI = 0;
+			vector <IMG_RCOORD> edgecoor;
+			vector <IMG_REAL> edgemag;
+			edgecoor.clear();
+			if (finalPtNums > 1)
+			{
+				for (int i = 0; i < finalPtNums - 1; i++)
+				{
+					if (edgeDirTemp[i] == EDGETYPE::LIGHT2DARK && edgeDirTemp[i + 1] == EDGETYPE::DARK2LIGHT)
+					{
+						if (m_MaxBlackWhiteCenterWidth < 0 || (ALIGN_DIST(EdgePts[i + 1], EdgePts[i]) < m_MaxBlackWhiteCenterWidth) &&
+							(ALIGN_DIST(EdgePts[i + 1], EdgePts[i]) > m_MinBlackWhiteCenterWidth))
+						{
+							tempPt.x = (EdgePts[i].x + EdgePts[i + 1].x) / 2.0;
+							tempPt.y = (EdgePts[i].y + EdgePts[i + 1].y) / 2.0;
+							vPoint1.push_back(EdgePts[i]);
+							vPoint2.push_back(EdgePts[i + 1]);
+							edgecoor.push_back(tempPt);
+							edgemag.push_back(EdgeMag[i]);
+						}
+						else if (m_uwDebug & 4)
+						{
+							writeLog("No %d edge reject by line width constrain", i);
+						}
+					}
+				}
+				EdgePts.clear();
+				EdgePts = edgecoor;
+				edgecoor.clear();
+				EdgeMag = edgemag;
+				edgemag.clear();
+				if (EdgePts.size() == 0)
+				{
+					runState = SELECT_ERROR;
+					break;
+				}
+				finalPtNums = EdgePts.size();
+				for (int i = 0; i < finalPtNums; i++)
+				{
+					pTempCoor[i] = EdgePts[i];
+				}
+				SearchNearCentPoint(pTempCoor, finalPtNums, m_lineStart, m_lineEnd, indexI);
+				tempPt = EdgePts[indexI];
+				EdgePts.clear();
+				EdgePts.push_back(tempPt);
+				mag = EdgeMag[indexI];
+				EdgeMag.clear();
+				EdgeMag.push_back(mag);
+			}
+			else
+			{
+				EdgePts.clear();
+			}
+			break;
+		}
+		default:
+			runState = SELECT_ERROR;
+			break;
+		}
+		/*if (flag == false)
+			runState = SELECT_ERROR;*/
+	}
+
+	if (m_uwDebug & 4)
+	{
+		CVisImage canvas;
+		IMG_RCOORD *transpt = (IMG_RCOORD *)pool.Malloc(sizeof(IMG_RCOORD)*EdgePts.size());
+		VALIDATE_MALLOC(transpt);
+		for(int i = 0; i<EdgePts.size(); i++)
+			ROI_ROTATION_COORDINATE_COMPUTE_IN_SOURCEIMAG_SL(-roiStruct.RotationAngle, roiStruct.DstCenterCo, roiStruct.SrcCenterCo, EdgePts[i], transpt[i]);
+		DrawChat(&dstRoiGrad, canvas, EdgePts.size(), transpt);
+		writeLog("\n");
+		writeLog("Edge Selection\n");
+		_snprintf(pathname, FILENAME_MAX_LENGTH, "%s\\LOG%05uEdge\\LOG%05uEdgeSelection.png", m_strDebugPath, ulEdgeSearchLogIndex, ulEdgeSearchLogIndex);
+		canvas.WriteImage(pathname);
+		p = strrchr(pathname, '\\') - 12;
+		HL_InsertImage(m_pHtmlLog, p);
+		writeLog("\n");
+	}
+	if (!flag)
+	{
+		EdgePts.clear();
+	}
+	EdgeSrcPts.clear();
+	m_ptNums = EdgePts.size();
+	if (m_ptNums < 1)
+	{
+		runState = SELECT_ERROR;
+	}
+	m_EdgePts = new IMG_RCOORD[m_ptNums];
+	for (int i = 0; i < m_ptNums; i++)
+	{
+		m_EdgePts[i].x = EdgePts[i].x;
+		m_EdgePts[i].y = EdgePts[i].y;
+	}
+	m_Magnitude = new IMG_REAL[m_ptNums];
+	for (int i = 0; i < m_ptNums; i++)
+	{
+		m_Magnitude[i] = fabs(EdgeMag[i]);
+	}
+	m_Angle = new IMG_REAL[m_ptNums];
+	if (m_edgeDir != EDGETYPE::WHITECENTER&&m_edgeDir != EDGETYPE::BLACKCENTER) 
+	{
+		for (int i = 0; i < m_ptNums; i++)
+		{
+			m_Angle[i] = Edge_Dir(mImage, m_EdgePts + i);
+		}
+	}
+	else {
+		IMG_RCOORD lineDir = { m_lineEnd.x - m_lineStart.x ,m_lineEnd.y - m_lineStart.y };
+		IMG_REAL angle1, angle2;
+		for (int i = 0; i < m_ptNums; i++)
+		{
+			angle1 = Edge_Dir(mImage, &vPoint1[i]);
+			angle2 = Edge_Dir(mImage, &vPoint2[i]);
+			if (lineDir.x*cos(angle1/180*PI) + lineDir.y*sin(angle1/180*PI) > 0) {//向量a与向量b的点积大于0，则a与b的夹角为锐角。				
+				m_Angle[i] = angle1;
+			}
+			else if(lineDir.x*cos(angle2 / 180 * PI) + lineDir.y*sin(angle2 / 180 * PI) > 0) {
+				m_Angle[i] = angle2;
+			}
+			else {
+				m_Angle[i] = 0;
+			}
+		}
+		vPoint1.clear();
+		vPoint2.clear();		
+	}
+	if(m_uwDebug & ALIGN_DEBUG_NORMAL)
+	{
+		CVisImage srcImage(mImage);
+		OutputEdgeTable(m_EdgePts, m_Magnitude, m_Angle,m_ptNums,  "After Edge Select");
+		writeLog("\n");
+		writeLog("Source Image ROI\n");
+		DrawResultImage(srcImage);
+		if(srcImage.Width()>JPG_SIZE_LIMITATION||srcImage.Height()>JPG_SIZE_LIMITATION)
+			_snprintf(pathname, FILENAME_MAX_LENGTH, "%s\\LOG%05uEdge\\LOG%05uEdgeResult.bmp", m_strDebugPath, ulEdgeSearchLogIndex, ulEdgeSearchLogIndex);
+		else
+			_snprintf(pathname, FILENAME_MAX_LENGTH, "%s\\LOG%05uEdge\\LOG%05uEdgeResult.jpg", m_strDebugPath, ulEdgeSearchLogIndex, ulEdgeSearchLogIndex);
+
+		srcImage.WriteImage(pathname);
+		p = strrchr(pathname, '\\')-12;
+		HL_InsertImage(m_pHtmlLog, p);
+	}
+	for (int i = 0; i < m_ptNums; i++)
+	{
+		m_EdgePts[i].x += m_ROI.coWindowOff.x;
+		m_EdgePts[i].y += m_ROI.coWindowOff.y;
+	}
+	if (m_uwDebug & ALIGN_DEBUG_NORMAL)
+		OutputEdgeTable(m_EdgePts, m_Magnitude, m_Angle, m_ptNums, "Final Result");
+	//if (edgeDirTemp)
+	//{
+	//	delete[]edgeDirTemp;
+	//	edgeDirTemp = NULL;
+	//}
+	//if (dstRoiGrad.ptr)
+	//{
+	//	delete[]dstRoiGrad.ptr;
+	//	dstRoiGrad.ptr = NULL;
+	//}
+	//if (dstRoi.ptr)
+	//{
+	//	delete[]dstRoi.ptr;
+	//	dstRoi.ptr = NULL;
+	//}
+	//if (dstRoiProj.ptr)
+	//{
+	//	delete[]dstRoiProj.ptr;
+	//	dstRoiProj.ptr = NULL;
+	//}
+	//tempCoor.clear();
+	EdgePts.clear();
+end:
+	if (m_uwDebug & ALIGN_DEBUG_NORMAL)logfinish();
+	if (m_uwDebug & ALIGN_DEBUG_TIME)
+	{
+		IMG_CHAR pathname[FILENAME_MAX_LENGTH], *p;
+
+		_snprintf(pathname, FILENAME_MAX_LENGTH, "%s\\LOG%05uEdgeT.txt", m_strDebugPath, ulEdgeSearchLogIndex);
+
+		debug_clock.Click("Finish");
+		//debug_clock.Stop();
+		debug_clock.SetPath(pathname);
+		debug_clock.SaveToFile();
+	}
+	mImage = src_save;
+	mMask = mask_save;
+	m_lineStart = startPt_save;
+	m_lineEnd = endPt_save;
+	memset(&m_ROI, 0, sizeof(m_ROI));
+	return runState;
+}
+IMG_REAL CVisEdge::Edge_Dir(IMG_UBBUF mImage, IMG_RCOORD *pt)
+{
+	IMG_UBBUF subImage;
+	IMG_LREAL sum_up, sum_down, sum_left, sum_right;
+	IMG_COORD ptc, ptUL;
+	IMG_INT size = m_normalVari*2+1;
+	IppStatus sts;
+	ptc.x = (pt->x + 0.5);
+	ptc.y = (pt->y + 0.5);
+	if (ptc.x >= mImage.size.width || ptc.y >= mImage.size.height)
+	{
+		THROW_VIS_EXCEPTION(VIS_ERR_INVALID_ARG);
+		return -1;
+	}
+	//up
+	if (ptc.y-1 - size >= 0)
+	{
+		subImage.size.height = size;
+		ptUL.y = ptc.y - size;
+	}
+	else
+	{
+		subImage.size.height = ptc.y;
+		ptUL.y = 0; 
+	}
+	if (ptc.x - m_normalVari >= 0)
+	{
+		subImage.size.width = m_normalVari+1;
+		ptUL.x = ptc.x - m_normalVari;
+	}
+	else
+	{
+		subImage.size.width = ptc.x;
+		ptUL.x = 0;
+	}
+	if (mImage.size.width < ptc.x+m_normalVari)
+	{
+		subImage.size.width += mImage.size.width - ptc.x -1;
+	}
+	else
+	{
+		subImage.size.width += m_normalVari;
+	}
+	subImage.ptr = mImage.ptr + ptUL.x + ptUL.y*(size_t)mImage.linestep;
+	subImage.linestep = mImage.linestep;
+	if (subImage.ptr < mImage.ptr || subImage.ptr + subImage.size.width - 1 + (subImage.size.height - 1)*(size_t)subImage.linestep > mImage.ptr + mImage.size.width - 1 + (mImage.size.height - 1)*(size_t)mImage.linestep)
+	{
+		THROW_VIS_EXCEPTION(VIS_ERR_OVERFLOW);
+	}
+	sts = ippiMean_8u_C1R(subImage.ptr, subImage.linestep, { subImage.size.width, subImage.size.height }, &sum_up);
+	if (sts != ippStsOk)
+		THROW_VIS_EXCEPTION(VIS_ERR_FAIL_IN_IPPI);
+	//down
+	if (ptc.y + size +1 < mImage.size.height)
+	{
+		subImage.size.height = size;
+		ptUL.y = ptc.y+1;
+	}
+	else
+	{
+		subImage.size.height = mImage.size.height - ptc.y - 1;
+		ptUL.y = ptc.y+1;
+	}
+	if (ptc.x - m_normalVari >= 0)
+	{
+		subImage.size.width = m_normalVari + 1;
+		ptUL.x = ptc.x - m_normalVari;
+	}
+	else
+	{
+		subImage.size.width = ptc.x;
+		ptUL.x = 0;
+	}
+	if (mImage.size.width <= ptc.x + m_normalVari)
+	{
+		subImage.size.width += mImage.size.width - ptc.x - 1;
+	}
+	else
+	{
+		subImage.size.width += m_normalVari;
+	}
+	subImage.ptr = mImage.ptr + ptUL.x + ptUL.y*(size_t)mImage.linestep;
+	subImage.linestep = mImage.linestep;
+	if (subImage.ptr < mImage.ptr || subImage.ptr + subImage.size.width - 1 + (subImage.size.height - 1)*(size_t)subImage.linestep > mImage.ptr + mImage.size.width - 1 + (mImage.size.height - 1)*(size_t)mImage.linestep)
+	{
+		THROW_VIS_EXCEPTION(VIS_ERR_OVERFLOW);
+	}
+	sts = ippiMean_8u_C1R(subImage.ptr, subImage.linestep, { subImage.size.width, subImage.size.height }, &sum_down);
+	if (sts != ippStsOk)
+		THROW_VIS_EXCEPTION(VIS_ERR_FAIL_IN_IPPI);
+	//left
+	if (ptc.y - m_normalVari >= 0)
+	{
+		subImage.size.height = m_normalVari+1;
+		ptUL.y = ptc.y - m_normalVari;
+	}
+	else
+	{
+		subImage.size.height = ptc.y+1;
+		ptUL.y = 0;
+	}
+	if (ptc.y + m_normalVari < mImage.size.height)
+	{
+		subImage.size.height += m_normalVari;
+	}
+	else
+	{
+		subImage.size.height += mImage.size.height - ptc.y - 1;
+	}
+	if (ptc.x -1- size >= 0)
+	{
+		subImage.size.width = size;
+		ptUL.x = ptc.x -1 - size;
+	}
+	else
+	{
+		subImage.size.width = ptc.x;
+		ptUL.x = 0;
+	}
+	//if (mImage.size.width < ptc.x + m_normalVari)
+	//{
+	//	subImage.size.width += mImage.size.width - ptc.x - 1;
+	//}
+	//else
+	//{
+	//	subImage.size.width += m_normalVari;
+	//}
+	subImage.ptr = mImage.ptr + ptUL.x + ptUL.y*(size_t)mImage.linestep;
+	subImage.linestep = mImage.linestep;
+	if (subImage.ptr < mImage.ptr || subImage.ptr + subImage.size.width - 1 + (subImage.size.height - 1)*(size_t)subImage.linestep > mImage.ptr + mImage.size.width - 1 + (mImage.size.height - 1)*(size_t)mImage.linestep)
+	{
+		THROW_VIS_EXCEPTION(VIS_ERR_OVERFLOW);
+	}
+	sts = ippiMean_8u_C1R(subImage.ptr, subImage.linestep, { subImage.size.width, subImage.size.height }, &sum_left);
+	if (sts != ippStsOk)
+		THROW_VIS_EXCEPTION(VIS_ERR_FAIL_IN_IPPI);
+	//right
+	if (ptc.y - m_normalVari >= 0)
+	{
+		subImage.size.height = m_normalVari + 1;
+		ptUL.y = ptc.y - m_normalVari;
+	}
+	else
+	{
+		subImage.size.height = ptc.y + 1;
+		ptUL.y = 0;
+	}
+	if (ptc.y + m_normalVari < mImage.size.height)
+	{
+		subImage.size.height += m_normalVari;
+	}
+	else
+	{
+		subImage.size.height += mImage.size.height - ptc.y - 1;
+	}
+	//if (ptc.x - size >= 0)
+	//{
+	//	subImage.size.width = size;
+	//	ptUL.x = ptc.x - size;
+	//}
+	//else
+	//{
+	//	subImage.size.width = ptc.x;
+	//	ptUL.x = 0;
+	//}
+	if (mImage.size.width < ptc.x +1+ size)
+	{
+		subImage.size.width = mImage.size.width - ptc.x - 1;
+		ptUL.x = ptc.x + 1;
+	}
+	else
+	{
+		subImage.size.width = size;
+		ptUL.x = ptc.x + 1;
+	}
+	subImage.ptr = mImage.ptr + ptUL.x + ptUL.y*(size_t)mImage.linestep;
+	subImage.linestep = mImage.linestep;
+	if (subImage.ptr < mImage.ptr || subImage.ptr + subImage.size.width - 1 + (subImage.size.height - 1)*(size_t)subImage.linestep > mImage.ptr + mImage.size.width - 1 + (mImage.size.height - 1)*(size_t)mImage.linestep)
+	{
+		THROW_VIS_EXCEPTION(VIS_ERR_OVERFLOW);
+	}
+	sts = ippiMean_8u_C1R(subImage.ptr, subImage.linestep, { subImage.size.width, subImage.size.height }, &sum_right);
+	if (sts != ippStsOk)
+		THROW_VIS_EXCEPTION(VIS_ERR_FAIL_IN_IPPI);
+	IMG_REAL angle = atan2(sum_down-sum_up, sum_right-sum_left)*180.0/PI;
+	if (angle < 0)angle += 360;
+	return angle;
+
+}
+
+IMG_VVOID CVisEdge::SearchNearCentPoint(IMG_RCOORD *srcPts, IMG_INT ptNums, const IMG_RCOORD &startPt, const IMG_RCOORD &endPt, IMG_INT &index)
+{
+	IMG_LRCOORD midPoint;
+	midPoint.x = (startPt.x + endPt.x) / 2;
+	midPoint.y = (startPt.y + endPt.y) / 2;
+	//IMG_INT ptNums = srcPts.size();
+	if (ptNums == 0)
+	{
+		return;
+	}
+	IMG_LREAL disTemp = pow(pow(startPt.x - endPt.x, 2) + pow(startPt.y - endPt.y, 2), 0.5);
+	IMG_LREAL dis = 0.0;
+	//int index;
+	for (int i = 0; i < ptNums; i++)
+	{
+		dis = pow(pow(srcPts[i].x - midPoint.x, 2) + pow(srcPts[i].y - midPoint.y, 2), 0.5);
+		if (dis < disTemp)
+		{
+			disTemp = dis;
+			index = i;
+		}
+	}
+	//vector<IMG_LRCOORD>tempPts;
+	//tempPts.clear();
+	//tempPts.push_back(srcPts[index]);
+	//srcPts.clear();
+	//srcPts = tempPts;
+	//tempPts.clear();
+	return;
+}
+
+IMG_INT CVisEdge::ROI_HORIZONTAL_ROTATION(const IMG_UBBUF &pSrc, const IMG_RCOORD &PointStart, const IMG_RCOORD &PointEnd, const IMG_REAL &NormalVari, RECTROIEDGE &RoiStruct, IMG_UBBUF &pubDst)
+{
+	IMG_REAL rAngle;
+	IMG_RCOORD prcoSrcCenter, prcoDstCenter;
+
+	IMG_SIZE pszOp;
+	IMG_INT DisPoint;
+
+	if (PointEnd.y == PointStart.y && PointEnd.x == PointStart.x)
+		return -1;
+
+	rAngle = (IMG_REAL)atan2((PointEnd.y - PointStart.y), (PointEnd.x - PointStart.x));
+	prcoSrcCenter.x = (IMG_REAL)(PointEnd.x + PointStart.x) / 2;
+	prcoSrcCenter.y = (IMG_REAL)(PointEnd.y + PointStart.y) / 2;
+	DisPoint = (IMG_INT)ceil(sqrt(pow(PointEnd.y - PointStart.y, 2) + pow(PointEnd.x - PointStart.x, 2)));
+	pszOp.width = DisPoint;
+	pszOp.height = (1 + m_dGaussKerHeight + NormalVari * 2);
+	prcoDstCenter.x = (pszOp.width - 1) / 2;
+	prcoDstCenter.y = (pszOp.height - 1) / 2;
+
+	//step: RTS 反旋转平移
+	//pubDst.ptr = (IMG_UBYTE*)malloc(sizeof(IMG_UBYTE) * pszOp.width * pszOp.height);
+	/*pubDst.size.width = pszOp.width;
+	pubDst.size.height = pszOp.height;
+	pubDst.linestep = pszOp.width;*/
+
+	DSP_RTS_R_8uC1(pSrc, prcoSrcCenter, pubDst, prcoDstCenter, rAngle, pszOp);
+	RoiStruct.SrcCenterCo.x = prcoSrcCenter.x;
+	RoiStruct.SrcCenterCo.y = prcoSrcCenter.y;
+	RoiStruct.DstCenterCo.x = prcoDstCenter.x;
+	RoiStruct.DstCenterCo.y = prcoDstCenter.y;
+	RoiStruct.RectangleSize.width = pszOp.width;
+	RoiStruct.RectangleSize.height = pszOp.height;
+	RoiStruct.RotationAngle = rAngle;
+	ROI_ROTATION_COORDINATE_COMPUTE_IN_SOURCEIMAG_SL(rAngle, prcoSrcCenter, prcoDstCenter, { 0.f,0.f }, RoiStruct.LeftVertex);
+	return 0;
+
+}
+
+/**********************************************/
+// DSP_RTS_R_8uC1, 功能说明,反旋转图片，一般用于求水平的原图像
+// Input:
+//     IMG_UBBUF prbSrc,输入图像（旋转过后的图像）
+//     IMG_RCOORD *prcoSrcCenter,原图像感兴趣区域的中心
+//     IMG_RCOORD *prcoDstCenter,目标图像的中心（未经旋转的图像）
+//     IMG_REAL rAngle, 旋转角
+//     IMG_SIZE *pszOp,目标图像大小
+// Output:
+//     IMG_UBBUF &prbDst, 旋转过后的图片
+// Return:
+//     0 - 正常（不存在越界问题，在原图没有找到的像素位用黑色填充）
+// Author: Ling Tan/3/1/2017
+/**********************************************/
+IMG_WORD CVisEdge::DSP_RTS_R_8uC1(const IMG_UBBUF &prbSrc, const IMG_RCOORD &prcoSrcCenter, IMG_UBBUF &prbDst, const IMG_RCOORD &prcoDstCenter, const IMG_REAL &rAngle, const IMG_SIZE &pszOp)
+{
+
+	IMG_UBYTE *prSrc, *prDst, *pBuffer;
+	IppiSize szSrc;
+	IppiRect srcROI, dstROI;
+	IppStatus sts;
+	IMG_WORD wState = 0;//IMG_WORD wState = OK;
+	int buffersize = 0, srclinestep, dstlinestep;
+	double coeff[2][4];
+
+	coeff[0][0] = 0;
+	coeff[0][1] = cos(rAngle);
+	coeff[0][2] = -sin(rAngle);
+	coeff[0][3] = -(cos(rAngle) * prcoDstCenter.x - sin(rAngle) * prcoDstCenter.y - prcoSrcCenter.x);
+
+	coeff[1][0] = 0;
+	coeff[1][1] = sin(rAngle);
+	coeff[1][2] = cos(rAngle);
+	coeff[1][3] = (-sin(rAngle) * prcoDstCenter.x - cos(rAngle) * prcoDstCenter.y + prcoSrcCenter.y);
+
+	prSrc = prbSrc.ptr;
+	szSrc.width = prbSrc.size.width;
+	szSrc.height = prbSrc.size.height;
+
+	srcROI.x = 0, srcROI.y = 0;
+	srcROI.width = szSrc.width, srcROI.height = szSrc.height;
+
+	prDst = prbDst.ptr;
+	dstROI.x = 0;
+	dstROI.y = 0;
+	dstROI.width = pszOp.width;
+	dstROI.height = pszOp.height;
+
+	srclinestep = prbSrc.linestep * sizeof(IMG_UBYTE);
+	dstlinestep = prbDst.linestep * sizeof(IMG_UBYTE);
+
+	sts = ippiWarpBilinearGetBufferSize(szSrc, srcROI, dstROI, ippWarpBackward, coeff, IPPI_INTER_LINEAR, &buffersize);
+	pBuffer = new IMG_UBYTE[buffersize];//(IMG_UBYTE*)malloc(sizeof(IMG_UBYTE)*buffersize);
+	sts = ippiWarpBilinearBack_8u_C1R(prSrc, szSrc, srclinestep, srcROI, prbDst.ptr, dstlinestep, dstROI, coeff, IPPI_INTER_LINEAR, pBuffer);
+	delete[] pBuffer;
+
+	if (sts != ippStsOk)
+	{
+		wState = 1;
+		//wState = DSP_ERR_FAIL_IN_IPPI;
+		goto end;
+	}
+end:
+	return wState;
+
+}
+
+IMG_WORD CVisEdge::DSP_RTS_R_8uC1_Spec(const IMG_UBBUF &prbSrc, const IMG_RCOORD &prcoSrcCenter, IMG_UBBUF &prbDst, const IMG_RCOORD &prcoDstCenter, const int &nAngle_spec, const IMG_SIZE &pszOp)
+{
+
+	IMG_UBYTE *prSrc, *prDst, *pBuffer;
+	IppiSize szSrc;
+	IppiRect srcROI, dstROI;
+	IppStatus sts;
+	IMG_WORD wState = 0;//IMG_WORD wState = OK;
+	int buffersize, srclinestep, dstlinestep;
+	double coeff[2][4];
+
+	if (nAngle_spec == 90)
+	{
+		coeff[0][0] = 0;
+		coeff[0][1] = 0;
+		coeff[0][2] = -1;
+		coeff[0][3] = -(0 * prcoDstCenter.x - 1 * prcoDstCenter.y - prcoSrcCenter.x);
+
+		coeff[1][0] = 0;
+		coeff[1][1] = 1;
+		coeff[1][2] = 0;
+		coeff[1][3] = (-1 * prcoDstCenter.x - 0 * prcoDstCenter.y + prcoSrcCenter.y);
+	}
+	else if (nAngle_spec == -90)
+	{
+		coeff[0][0] = 0;
+		coeff[0][1] = 0;
+		coeff[0][2] = 1;
+		coeff[0][3] = -(0 * prcoDstCenter.x + 1 * prcoDstCenter.y - prcoSrcCenter.x);
+
+		coeff[1][0] = 0;
+		coeff[1][1] = -1;
+		coeff[1][2] = 0;
+		coeff[1][3] = (1 * prcoDstCenter.x - 0 * prcoDstCenter.y + prcoSrcCenter.y);
+	}
+
+
+	prSrc = prbSrc.ptr;
+	szSrc.width = prbSrc.size.width;
+	szSrc.height = prbSrc.size.height;
+
+	srcROI.x = 0, srcROI.y = 0;
+	srcROI.width = szSrc.width, srcROI.height = szSrc.height;
+
+	prDst = prbDst.ptr;
+	dstROI.x = 0;
+	dstROI.y = 0;
+	dstROI.width = pszOp.width;
+	dstROI.height = pszOp.height;
+
+	srclinestep = prbSrc.linestep * sizeof(IMG_UBYTE);
+	dstlinestep = prbDst.linestep * sizeof(IMG_UBYTE);
+
+	sts = ippiWarpBilinearGetBufferSize(szSrc, srcROI, dstROI, ippWarpBackward, coeff, IPPI_INTER_NN, &buffersize);
+	pBuffer = new IMG_UBYTE[buffersize];//(IMG_UBYTE*)malloc(sizeof(IMG_UBYTE)*buffersize);
+	sts = ippiWarpBilinearBack_8u_C1R(prSrc, szSrc, srclinestep, srcROI, prbDst.ptr, dstlinestep, dstROI, coeff, IPPI_INTER_LINEAR, pBuffer);
+	delete[] pBuffer;
+
+	if (sts != ippStsOk)
+	{
+		wState = 1;
+		//wState = DSP_ERR_FAIL_IN_IPPI;
+		goto end;
+	}
+
+end:
+	return wState;
+
+}
+
+/**********************************************/
+// ROI_ROTATION_COORDINATE_COMPUTE_IN_SOURCEIMAG_SL, 功能说明,应用于图片旋转，输入ROI上的点坐标返回原始图片对应点的坐标
+// Input:
+//     IMG_REAL rAngle,旋转角度
+//     IMG_RCOORD SrcCenterCo,原始图片roi区域对应的中心点坐标
+//     IMG_RCOORD DstCenterCo,roi区域的中心点坐标
+//     IMG_RCOORD RoiCo, roi区域点坐标
+// Output:
+//     IMG_RCOORD &RealCo, 原始图片点坐标
+// Return:
+//     0 - 正常
+// Author: Ling Tan/3/1/2017
+/**********************************************/
+IMG_INT CVisEdge::ROI_ROTATION_COORDINATE_COMPUTE_IN_SOURCEIMAG_SL(const IMG_REAL &rAngle, const IMG_RCOORD &SrcCenterCo, const IMG_RCOORD &DstCenterCo, const IMG_RCOORD &RoiCo, IMG_RCOORD &RealCo)
+{
+
+	RealCo.x = RoiCo.x * cos(rAngle) - sin(rAngle) * RoiCo.y - (cos(rAngle) * DstCenterCo.x - sin(rAngle)* DstCenterCo.y - SrcCenterCo.x);
+	RealCo.y = RoiCo.x * sin(rAngle) + cos(rAngle) * RoiCo.y + (-sin(rAngle) * DstCenterCo.x - cos(rAngle)* DstCenterCo.y + SrcCenterCo.y);
+
+	return 0;
+}
+void set_IMG_UBBUF(IMG_UBBUF &buf, IMG_UBYTE *p, IMG_SIZE sz, IMG_UINT linstep);
+
+IMG_INT  CVisEdge::GaussianFilter_2D(const IMG_UBYTE *src,const IMG_INT &roiWidth, const IMG_INT &roiHeight,const IMG_INT &kerWidth,const IMG_INT &kerHeight,const IMG_REAL &sigma_width,const IMG_REAL &sigma_height, IMG_UBYTE *&dst)
+{
+	IMG_INT status = 0;
+	//VisBuf visbuf;
+	IMG_UBBUF ubbGauss;
+	set_IMG_UBBUF(ubbGauss, dst, { roiWidth,roiHeight }, roiWidth);
+
+	//row filter
+	int pos = 0;
+	for (int i = 0; i < roiHeight; i++)
+	{
+		status = GaussianFilter_dim1_fixed(src + pos, roiWidth, sigma_width, kerWidth, dst + pos);
+		pos += roiWidth;
+	}
+
+	//rotate 90
+	IMG_UBBUF ubbTempBuf;
+	unsigned char *m_pTemp = new unsigned char[(size_t)roiWidth * roiHeight];
+	set_IMG_UBBUF(ubbTempBuf, m_pTemp, { roiHeight,roiWidth }, roiHeight);
+	IMG_RCOORD oldCenter = { (roiWidth - 1) / 2.0f, (roiHeight - 1) / 2.0f };
+	IMG_RCOORD newCenter = { (roiHeight - 1) / 2.0f, (roiWidth - 1) / 2.0f };
+	status = DSP_RTS_R_8uC1_Spec(ubbGauss, oldCenter, ubbTempBuf, newCenter, -90, { roiHeight,roiWidth });
+
+	//col filter
+	IMG_UBBUF ubbTempGaussBuf;
+	unsigned char *m_pTempGauss = new unsigned char[(size_t)roiWidth * roiHeight];
+	set_IMG_UBBUF(ubbTempGaussBuf, m_pTempGauss, { roiHeight,roiWidth }, roiHeight);
+
+	pos = 0;
+	for (int i = 0; i < roiWidth; i++)
+	{
+		status = GaussianFilter_dim1_fixed(ubbTempBuf.ptr + pos, roiHeight, sigma_height, kerHeight, m_pTempGauss + pos);
+		pos += roiHeight;
+	}
+
+	//rotate 90
+	status = DSP_RTS_R_8uC1_Spec(ubbTempGaussBuf, newCenter, ubbGauss, oldCenter, 90, { roiWidth,roiHeight });
+
+	delete[] m_pTempGauss;
+	delete[] m_pTemp;
+
+	return status;
+}
+
+IMG_INT CVisEdge::GaussianFilter_dim1_fixed(const IMG_UBYTE *src,const IMG_INT &srcWidth, const IMG_REAL &sigma, const IMG_UINT &kernelSize, IMG_UBYTE *dst)
+{
+	IMG_INT status = 0;
+	IMG_INT src1Len = srcWidth, src2Len = kernelSize;
+	src1Len += 2 * (src2Len / 2);	//top and bottom
+
+
+	IppEnum funCfg = (IppEnum)(ippAlgAuto);
+	IMG_INT bufSize = 0;
+	Ipp8u *pBuffer;
+
+	Ipp32f *pSrc1 = new Ipp32f[src1Len];
+	int additionLen = src2Len / 2;
+	for (int i = 0; i < src1Len; i++)
+	{
+		if (i < additionLen)
+		{
+			pSrc1[i] = src[0];
+		}
+		else if (i > src1Len - 1 - (additionLen))
+		{
+			pSrc1[i] = src[srcWidth - 1];
+		}
+		else
+		{
+			pSrc1[i] = src[i - (additionLen)];
+		}
+
+	}
+	Ipp32f *pSrc2 = new Ipp32f[src2Len];
+	int dstLen = src1Len + src2Len - 1;
+	Ipp32f *pDst = new Ipp32f[dstLen];
+
+	GetGaussianKernel_dim1(pSrc2, src2Len, sigma);
+
+	status = ippsConvolveGetBufferSize(src1Len, src2Len, ipp32f, funCfg, &bufSize);
+	if (status != ippStsNoErr)
+		return status;
+
+	pBuffer = ippsMalloc_8u(bufSize);
+
+	status = ippsConvolve_32f(pSrc1, src1Len, pSrc2, src2Len, pDst, funCfg, pBuffer);
+
+	//assert(_CrtCheckMemory());
+	if (status == 0)
+	{
+		for (int i = 0; i < srcWidth; i++)			//注意两端
+		{
+			dst[i] = (unsigned char)pDst[i + src2Len - 1];
+		}
+	}
+
+	//assert(_CrtCheckMemory());
+	ippsFree(pBuffer);
+	delete[] pDst;
+	delete[] pSrc2;
+	delete[] pSrc1;
+
+	return status;
+}
+
+IMG_VVOID CVisEdge::GetGaussianKernel_dim1(IMG_REAL *&gaus,const IMG_UINT &size,const IMG_REAL &sigma)
+{
+	const double pi = 4.0*atan(1.0); //圆周率π赋值  
+	double center = size / 2;
+	double sum = 0;
+	for (int i = 0; i < size; i++)
+	{
+		gaus[i] = (IMG_REAL)(1 / (sqrt(2 * pi)*sigma))*exp(-((i - center)*(i - center)) / (2 * sigma*sigma));
+		sum += gaus[i];
+	}
+	for (int i = 0; i < size; i++)
+	{
+		if (size > 0)
+			gaus[i] /= sum;
+	}
+}
+
+/**********************************************/
+// Plot_Horizontal_Profile, 功能说明,求直线方向的剖面线（平均灰度）
+// Input:
+//     IMG_UBBUF ubbSrc,输入图像（roi）
+//
+// Output:
+//     IMG_RBUF &rbProfile, 剖面线
+// Return:
+//     0 - 正常
+// Author: 
+/**********************************************/
+int CVisEdge::Plot_Horizontal_Profile(const IMG_UBBUF &ubbSrc, IMG_RBUF &rbProfile)
+{
+	int roiWidth = ubbSrc.size.width;
+	int roiHeight = ubbSrc.size.height;
+	memset(rbProfile.ptr, 0, roiWidth * sizeof(float));
+
+	unsigned char* pSrc = ubbSrc.ptr;
+	float *pMeanGray = rbProfile.ptr;
+
+	for (int j = 0; j < roiWidth; j++)
+	{
+		double sum = 0.0;
+		for (int i = 0; i < roiHeight; i++)
+		{
+			sum += pSrc[i * roiWidth + j];
+		}
+		sum /= roiHeight;
+		pMeanGray[j] = (IMG_REAL)sum;
+	}
+	return 0;
+}
+int compare_ubyte(const void *a, const void *b)
+{
+	IMG_INT a1 = *(IMG_UBYTE *)a;
+	IMG_INT b1 = *(IMG_UBYTE *)b;
+	return a1 - b1;
+}
+int CVisEdge::Plot_Horizontal_Profile_Median(const IMG_UBBUF &ubbSrc, IMG_RBUF &rbProfile)
+{
+	int roiWidth = ubbSrc.size.width;
+	int roiHeight = ubbSrc.size.height;
+	memset(rbProfile.ptr, 0, roiWidth * sizeof(float));
+	CVisImage img(ubbSrc);
+	//img.WriteImage_Syn("C:\\temp\\log\\trans_src.bmp");
+	img.Transpose();
+	//img.WriteImage_Syn("C:\\temp\\log\\trans_dst.bmp");
+	IMG_UBBUF ubbTrans;
+	img.GetImage(&ubbTrans);
+
+
+	unsigned char* pSrc = ubbSrc.ptr;
+	float *pMeanGray = rbProfile.ptr;
+
+	for (int j = 0; j < roiWidth; j++)
+	{
+		pSrc = ubbTrans.ptr+j*ubbTrans.linestep;
+		qsort(pSrc, ubbTrans.size.width, sizeof(IMG_UBYTE), compare_ubyte);
+		pMeanGray[j] = pSrc[ubbTrans.size.width >> 1];
+	}
+	return 0;
+}
+
+
+int CVisEdge::Plot_Gradient_Profile(const IMG_RBUF &ubbProfile_gray, IMG_RBUF &rbGraProfile, const IMG_INT &kerSize)
+{
+	int plotWidth = ubbProfile_gray.size.width;
+	float *pSrc = ubbProfile_gray.ptr;
+	float *pDst = rbGraProfile.ptr;
+	memset(pDst, 0, plotWidth * sizeof(float));
+	//int ker = kerSize / 2;
+	/*if (ker == 1)
+	{
+		for (int j = 1; j < plotWidth - 1; j++)
+		{
+			pDst[j] = (pSrc[j + 1] - pSrc[j - 1]);
+		}
+	}
+	if (ker == 2)
+	{
+		for (int j = 2; j < plotWidth - 2; j++)
+		{
+			pDst[j] = (pSrc[j + 1] + pSrc[j + 2] - pSrc[j - 1] - pSrc[j - 2]) / 2.f;
+		}
+	}*/
+	float temp1 = 0.f, temp2 = 0.f, temp3 = 0.f;
+	if (kerSize == 0)
+	{
+		for (int i = 0; i < plotWidth - 1; i++)
+		{
+			pDst[i] = pSrc[i + 1] - pSrc[i];
+		}
+		pDst[plotWidth - 1] = pDst[plotWidth - 2];
+		return 0;
+	}
+	for (int i = kerSize; i < plotWidth - kerSize; i++)
+	{
+		/*temp1 = 0.f, temp2 = 0.f;
+		for (int j = 0; j < kerSize; j++)
+		{
+			temp1 += pSrc[i + j + 1];
+			temp2 += pSrc[i - (j + 1)];
+		}*/
+		pDst[i] = (pSrc[i+kerSize] - pSrc[i-kerSize]);
+	}
+	for (int i = 0; i < kerSize; i++)pDst[i] = pDst[kerSize];
+	for (int i = plotWidth - kerSize; i < plotWidth; i++)pDst[i] = pDst[plotWidth - kerSize - 1];
+	return 0;
+}
+IMG_INT  CVisEdge::FindRisingEdge(const IMG_RBUF &srcBuf, const IMG_RBUF &srcGradBuf, const int &minThre, IMG_RCOORD *&EdgePts, IMG_REAL *&Magnitude, IMG_INT &edgeNums)
+{
+	CVisMemPool pool;
+	IMG_REAL /**prEdgeMag, */*pSrc = srcBuf.ptr, *pGrad = srcGradBuf.ptr;
+	IMG_REAL sum = pSrc[0], average = pSrc[0], subpixel, dir = 0;
+	IMG_UWORD size = srcBuf.size.width;
+	//IMG_RCOORD *prcoEdge = (IMG_RCOORD *)pool.Malloc(size*sizeof(IMG_RCOORD));
+	//prEdgeMag = (IMG_REAL *)pool.Malloc(size * sizeof(IMG_REAL));
+	//if (prcoEdge == nullptr || prEdgeMag == nullptr)THROW_VIS_EXCEPTION(MEM_ERR_MALLOC);
+	IMG_INT i, j, kernel = (m_iGradKernal > 0 ? m_iGradKernal : 1);
+	edgeNums = 0;
+	for (i = 1; i < size-2; i++)
+	{
+		if (fabs(pSrc[i] - average) > minThre && fabs(pSrc[i+1] - average) > minThre && fabs(pSrc[i+2] - average) > minThre)
+		{
+			if (dir * (pSrc[i] - average) <= 0)
+			{
+				if (pSrc[i] > average)
+					subpixel = (pSrc[i] - average - minThre) / (pSrc[i] - pSrc[i - 1]);
+				else
+					subpixel = (pSrc[i] - average + minThre) / (pSrc[i] - pSrc[i - 1]);
+				EdgePts[edgeNums].x = i - subpixel;
+				EdgePts[edgeNums].y = m_normalVari;
+				Magnitude[edgeNums] = pGrad[i];
+				for (j = i+1; j < size; j++)
+				{
+					if (Magnitude[edgeNums] < pGrad[j])
+						Magnitude[edgeNums] = pGrad[j];
+					if(pSrc[j] < pSrc[j-1])
+						break;
+				}
+				edgeNums++;
+				dir = pSrc[i] - average;
+			}
+		}
+		sum += pSrc[i];
+		if (i >= kernel)
+		{
+			sum -= pSrc[i - kernel];
+			average = sum / kernel;
+		}
+		else
+		{
+			average = sum / (i+1);
+		}
+	}
+	return 0;
+}
+int CVisEdge::FindGravityPeak(const IMG_RBUF &srcBuf, const int &minThre, IMG_RCOORD *&EdgePts, IMG_REAL *&Magnitude, IMG_INT &edgeNums, const IMG_INT &kerSize)
+{
+	vector<IMG_RCOORD>tempEdgePts;
+	vector<IMG_REAL>tempEdgeMag;
+
+	int status = 0;
+	IppiSize roi = { srcBuf.size.width,1 };
+
+	float *pGravity = srcBuf.ptr;
+	IMG_RCOORD tempPt;
+	//findPeaks
+	//int kel = m_iGradKernal + 1;
+	//for (int j = kel; j < roi.width - kel; j++)
+	int kel_left, kel_right;
+	if (kerSize == 0)
+	{
+		kel_left = 1;
+		kel_right = 2;
+	}
+	else
+	{
+		kel_left = kel_right = kerSize + 1;
+	}
+	for (int j = kel_left; j < roi.width - kel_right; j++)
+	{
+		if (abs(pGravity[j]) > minThre)
+		{
+			if ((pGravity[j - 1] - pGravity[j]) * (pGravity[j] - pGravity[j + 1]) < 0)
+			{
+				tempPt.x = j;
+				tempPt.y = m_normalVari;
+				tempEdgePts.push_back(tempPt);
+				tempEdgeMag.push_back(pGravity[j]);
+				continue;
+			}
+			if (((pGravity[j - 1] - pGravity[j]) != 0 && (pGravity[j] - pGravity[j + 1]) == 0)||
+				((pGravity[j - 1] - pGravity[j]) == 0 && (pGravity[j] - pGravity[j + 1]) != 0))
+			{
+				tempPt.x = j;
+				tempPt.y = m_normalVari;
+				tempEdgePts.push_back(tempPt);
+				tempEdgeMag.push_back(pGravity[j]);
+				j++;
+				continue;
+			}
+		}
+
+	}
+	edgeNums = tempEdgePts.size();
+	if (edgeNums < 1)
+	{
+		return -1;
+	}
+	//EdgePts = new IMG_RCOORD[edgeNums];
+	for (int i = 0; i < edgeNums; i++)
+	{
+		EdgePts[i].x = tempEdgePts[i].x;
+		EdgePts[i].y = tempEdgePts[i].y;
+		Magnitude[i] = tempEdgeMag[i];
+	}
+	return status;
+}
+
+int CVisEdge::FittingGraPoints(const IMG_RBUF &rbProfile_gra, IMG_RCOORD *&EdgePts, IMG_INT &edgeNums, const GradMethod &gradMethod, const IMG_RBUF &gradProj)
+{
+	int roiWidth = rbProfile_gra.size.width;
+	float *pGradient = rbProfile_gra.ptr;
+	int peakNums = edgeNums;
+	switch (gradMethod)
+	{
+	case GradMethod::EDGE_QUADRATIC:
+		for (int k = 0; k < peakNums; k++)
+		{
+			if (EdgePts[k].x - 0.f < 1e-6&&EdgePts[k].y - 0.f < 1e-6)
+			{
+				continue;
+			}
+			double val;
+			double val1 = pGradient[(int)EdgePts[k].x - 1];
+			double val2 = pGradient[(int)EdgePts[k].x];
+			double val3 = pGradient[(int)EdgePts[k].x + 1];
+			double deci = (val3 - val1) / (2.0*(2.0*val2 - val1 - val3));
+			EdgePts[k].x = (float)(EdgePts[k].x + deci);
+		}
+		break;
+	case GradMethod::EDGE_GAUSS:
+		for (int k = 0; k < peakNums; k++)
+		{
+			if (EdgePts[k].x - 0.f < 1e-6&&EdgePts[k].y - 0.f < 1e-6)
+			{
+				continue;
+			}
+			double val1 = log(fabs(pGradient[(int)EdgePts[k].x - 1]));
+			double val2 = log(fabs(pGradient[(int)EdgePts[k].x]));
+			double val3 = log(fabs(pGradient[(int)EdgePts[k].x + 1]));
+			double deci = (val3 - val1) / (2.0*(2.0*val2 - val1 - val3));
+
+			EdgePts[k].x = (float)(EdgePts[k].x + deci);
+		}
+		break;
+
+	case GradMethod::EDGE_SIGMOID:
+		for (int k = 0; k < peakNums; k++)
+		{
+			if (EdgePts[k].x - 0.f < 1e-6&&EdgePts[k].y - 0.f < 1e-6)
+			{
+				continue;
+			}
+			double val;
+			SigmoidFitting(gradProj, (int)EdgePts[k].x, 13, val);
+			EdgePts[k].x = (float)(EdgePts[k].x + val);
+		}
+
+		break;
+	default:
+		break;
+	}
+	
+	return 0;
+}
+
+int CVisEdge::SigmoidFitting(const IMG_RBUF &srcImg, const IMG_INT &edgePt, const IMG_INT &kernal, double &dstEdge)
+{
+	vector<IMG_LRCOORD> coorEdge;
+	coorEdge.clear();
+	IMG_LRCOORD tempCoor;
+	for (int i = -kernal / 2; i <= kernal / 2; i++)
+	{
+		if (edgePt + i >= 0 && edgePt + i < srcImg.size.width)
+		{
+			tempCoor.x = edgePt + i;
+			tempCoor.y = srcImg.ptr[(int)tempCoor.x];
+			coorEdge.push_back(tempCoor);
+		}
+	}
+	/*tempCoor.x = edgePt;
+	tempCoor.y = srcImg.ptr[(int)tempCoor.x];
+	coorEdge.push_back(tempCoor);*/
+
+	double maxGray, minGray;
+	maxGray = 0.0; minGray = 255.0;
+	IMG_INT coorNums = coorEdge.size();
+	int maxIndex, minIndex;
+	for (int i = 0; i < coorNums; i++)
+	{
+		if (coorEdge[i].y >= maxGray)
+		{
+			maxGray = coorEdge[i].y;
+			maxIndex = i;
+		}
+		if (coorEdge[i].y <= minGray)
+		{
+			minGray = coorEdge[i].y;
+			minIndex = i;
+		}
+	}
+	coorEdge.erase(coorEdge.begin() + minIndex);
+	if (minIndex > maxIndex)
+	{
+		coorEdge.erase(coorEdge.begin() + maxIndex);
+	}
+	else
+	{
+		coorEdge.erase(coorEdge.begin() + maxIndex - 1);
+	}
+	coorNums = coorEdge.size();
+	IMG_LRCOORD * tempCoors = new IMG_LRCOORD[coorNums];
+	for (int i = 0; i < coorNums; i++)
+	{
+		tempCoors[i].x = coorEdge[i].x - edgePt;
+		tempCoors[i].y = (coorEdge[i].y - minGray) / (maxGray - minGray);
+	}
+	float num;
+	srand(time(NULL));
+	//num = (rand() % 100)*0.01;
+	double w = (rand() % 100) * 0.01;
+	double b = (rand() % 100) * 0.01;
+	double c = (rand() % 100) * 0.01;
+	double d = (rand() % 100) * 0.01;
+	double step = 0.1;
+	double sum = 0.0, sumBeform;
+	
+	sum = LossSum(w, b, c, d, tempCoors, coorNums);
+	int iter = 1;
+	//vector <IMG_LRCOORD>Coor;
+	IMG_LRCOORD tempVal;
+	//Coor.clear();
+
+	double tineD;
+	while (1)
+	{
+		double val;
+		//CVisClo clo;
+		//clo.Start();
+		
+		if (fabs(sum - 0.0) < 1e-5)
+		{
+			dstEdge = -b / w;
+			break;
+		}
+		if (iter > 1)
+		{
+			if (fabs(sumBeform - sum) < 1e-7 || iter == 500)
+			{
+				dstEdge = -b / w;
+				break;
+			}
+		}
+		double tempSumW = 0.0, tempSumB = 0.0, tempSumC = 0.0, tempSumD = 0.0;
+		for (int i = 0; i < coorNums; i++)
+		{
+			tempSumW += (SigmoidFun(w, coorEdge[i].x, b, c, d) - coorEdge[i].y)*SigmoidFun(w, coorEdge[i].x, b, 1, 0)*(SigmoidFun(w, coorEdge[i].x, b, 1, 0) - 1)*(coorEdge[i].x)*c;
+			tempSumB += (SigmoidFun(w, coorEdge[i].x, b, c, d) - coorEdge[i].y)*SigmoidFun(w, coorEdge[i].x, b, 1, 0)*(SigmoidFun(w, coorEdge[i].x, b, 1, 0) - 1)*c;
+			tempSumC += (SigmoidFun(w, coorEdge[i].x, b, c, d) - coorEdge[i].y)*SigmoidFun(w, coorEdge[i].x, b, 1, 0);
+			tempSumD += (SigmoidFun(w, coorEdge[i].x, b, c, d) - coorEdge[i].y);
+		}
+		w -= step*tempSumW; b -= step*tempSumB; c -= step*tempSumC; d -= step*tempSumD;
+		sumBeform = sum;
+		sum = LossSum(w, b, c ,d, tempCoors, coorNums);
+		tempVal.x = iter; tempVal.y = sum;
+		//Coor.push_back(tempVal);
+		iter++;
+	}
+
+	/*FILE *ptTemp;
+	ptTemp = fopen("first1.txt", "w+");
+	for (int j = 0; j < Coor.size(); j++)
+	{
+		fprintf(ptTemp, "%12.9e %12.9e\n", Coor[j].x, Coor[j].y);
+
+	}
+	fclose(ptTemp);*/
+
+	if (tempCoors)
+	{
+		delete[]tempCoors;
+		tempCoors = NULL;
+	}
+	coorEdge.clear();
+	return 0;
+}
+
+double CVisEdge::SigmoidFun(const double &w, const double &x, const double &b, const double &c, const double &d)
+{
+	double result;
+	result = c / (1 + exp(w*x + b)) + d;
+	return result;
+}
+
+double CVisEdge::LossSum(const double &w, const double &b, const double &c, const double &d, IMG_LRCOORD *&coorEdge, const IMG_INT &edgeNums)
+{
+	double sum = 0.0;
+	for (int i = 0; i < edgeNums; i++)
+	{
+		sum += pow((SigmoidFun(w, coorEdge[i].x, b, c, d) - coorEdge[i].y), 2);
+	}
+	sum = sum / 2.0;
+	return sum;
+}
+
+double CVisEdge::fast_exp(double y) {
+	double d;
+	*(reinterpret_cast<int*>(&d) + 0) = 0;
+	*(reinterpret_cast<int*>(&d) + 1) = static_cast<int>(1512775 * y + 1072632447);
+	return d;
+}
+
+double CVisEdge::exp1(double x) {
+	x = 1.0 + x / 256.0;
+	x *= x; x *= x; x *= x; x *= x;
+	x *= x; x *= x; x *= x; x *= x;
+	return x;
+}
