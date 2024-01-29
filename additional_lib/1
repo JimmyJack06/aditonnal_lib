@@ -1,171 +1,368 @@
 #pragma once
+#include <ViType.h>
+#include <memory.h>
 
-//#include <ViType.h>
-//#include <ipp.h>
-//#include<mkl.h>
-//#include "Vis_assist.h"
-#include<time.h>
-#include <VisAlign.h>
-//#include "VisClock.h"
-
-//#include<cmath>
-#ifdef  CVISALIGN_EXPORTS
-#define CVISALIGN_DLL_EXPORTS __declspec(dllexport)
+#ifdef  DLL_EXPORTS
+#define DLLEXPORT __declspec(dllexport)
 #else
-#define CVISALIGN_DLL_EXPORTS __declspec(dllimport)   
+#define DLLEXPORT __declspec(dllimport)   
 #endif
 
-using namespace std;
+#define MAX_FILE_NAME (2560)
+#define MAX_CHANNEL_NUM (100)
+#define PLATTE_SIZE (1024)
+#define JPG_SIZE_LIMITATION (65000)
 
-#define RUN_RIGHT (0)
-#define	IMAGE_ERROR (2)
-#define	LINEWIDTH_ERROR (4)
-#define	ROT_ERROR (6)
-#define	GAUSSKER_ERROR (8)
-#define	GAUSSFUN_ERROR (10)
-#define	NOEDGE (12)
-#define	OUTFOUND (14)
-#define	SELECT_ERROR (16)
-
-
-//enum class EDGETYPE {
-//	ANY,
-//	LITGHT2DARK,
-//	DARK2LIGHT,
-//	WHITECENTER,
-//	BLACKCENTER
-//};
-
-enum class EdgePriorSelect {
-	FIRST,	//顶端
-	BEST,	//边缘强度最大
-	NEARCENTER, //中心线附近
-	ALL,
-};
-
-enum class GRADLEVEL_EDGE {
-	//DARKER,
-	DARK,
-	NORMAL,
-	LIGHT,
-	//LIGHTER,
-	USERINPUT
-};
-
-enum class GradMethod {
-	EDGE_QUADRATIC,
-	EDGE_GAUSS,
-	EDGE_SIGMOID,
-	EDGE_RISING
-};
-enum class FindEdgeOption {
-	OPTION_NONE,
-	OPTION_MEDIAN_TANDIR
-};
-typedef struct _RECTROIEDGE
+enum IMAGE_TYPE
 {
-	IMG_RCOORD LeftVertex;
-	IMG_RCOORD SrcCenterCo;//the center coordinate of ROI in source image
-	IMG_RCOORD DstCenterCo;//the center coordinate of ROI 
-	IMG_SIZE RectangleSize;
-	IMG_REAL RotationAngle;
-}RECTROIEDGE;
+	BMP_TYPE = 0,
+	TIFF_TYPE = 1,
+	JPG_TYPE = 2,
+	PNG_TYPE = 3,
+	UNKNOWN_TYPE = 4
+};
 
-class CVISALIGN_DLL_EXPORTS CVisEdge : public CViObject
+enum PIXEL_TYPE
+{
+	VIS_IMG_UINT8,
+	VIS_IMG_SHORT16,
+	VIS_IMG_REAL, //32f
+};
+
+enum CHANNEL_INFO
+{
+	VIS_IMG_GRAY = 1,
+	VIS_IMG_RGB = 3,
+	VIS_IMG_ARGB = 4
+};
+
+enum Threshold_TYPE
+{
+	CmpLess = 0,
+	CmpLessEq = 1,
+	CmpEq = 2,
+	CmpGreaterEq = 3,
+	CmpGreater = 4
+};
+
+enum Axis {
+	AxsHorizontal = 0,
+	AxsVertical = 1,
+	AxsBoth = 2,
+	Axs45 = 3,
+	Axs135 = 4
+};
+
+enum Mesurement {
+	MesureSum = 0, // IMG_REAL m = MesureSum
+	MesureMean = 1,// IMG_REAL m = MesureMean
+	MesureStd = 2,// IMG_REAL m = MesureStd
+	MesureArea = 3,	// IMG_REAL m = MesureArea
+	MesureMin = 4, // IMG_REAL m[3] = {min_value, position_x, position_y}
+	MesureMax = 5, // IMG_REAL m[3] = {max_value, position_x, position_y}
+	MesureCentroid = 6, // IMG_REAL m[3] = {centermass_value, position_x, position_y}
+	MesureCenterpoint = 7,  // IMG_REAL m[3] = {center_value, position_x, position_y}
+	MesureAll = 8   // IMG_REAL m[16] = {MesureSum, MesureMean, MesureStd, MesureArea, min_value, position_x, position_y, max_value, position_x, position_y, 
+					//centermass_value, position_x, position_y,  center_value, position_x, position_y}
+};
+
+
+enum POSITION {
+
+	TOP_LEFT = 11,
+	TOP_CENTER = 12,
+	TOP_RIGHT = 13,
+	CENTER_LEFT = 21,
+	CENTER = 22,
+	CENTER_RIGHT = 23,
+	BOTTOM_LEFT = 31,
+	BOTTOM_CENTER = 32,
+	BOTTOM_RIGHT = 33
+};
+
+enum COLORS {
+	Black = 0,			//0,0,0
+	White = 1,			//255,255,255
+	Red = 2,				//255,0,0
+	Green = 3,			//0,255,0
+	Blue = 4,				//0,0,255
+	Cyan = 5,			//0,255,255
+	Fuchsia = 6,		//255,0,255
+	Yellow = 7,			//255,255,0
+};
+
+struct DLLEXPORT VIS_IMAGE_INFO
+{
+	IMG_INT width;
+	IMG_INT height;
+	IMG_INT byte_per_pixel;
+	IMG_INT page_num;
+	CHANNEL_INFO channel;
+	IMG_INT palette_size = 0;
+	IMG_INT sample_per_pixel;
+	enum PIXEL_TYPE pixel_type;		//necessary, pixel type, self explain
+	enum IMAGE_TYPE img_type;		//necessary, state image channel, self explain
+	IMG_INT linestep;
+
+	void clear()
+	{
+		memset(this, 0x00, sizeof(VIS_IMAGE_INFO));
+	}
+
+	VIS_IMAGE_INFO& operator=(const VIS_IMAGE_INFO& o) // rewrite operator=
+	{
+		width = o.width;
+		height = o.height;
+		byte_per_pixel = o.byte_per_pixel;
+		page_num = o.page_num;
+		channel = o.channel;
+		palette_size = o.palette_size;
+		pixel_type = o.pixel_type;
+		img_type = o.img_type;
+		sample_per_pixel = o.sample_per_pixel;
+		linestep = o.linestep;
+		return *this;
+	}
+
+	bool operator!=(const VIS_IMAGE_INFO& o) // rewrite operator!=
+	{
+		bool state = true;
+		if (width == o.width && height == o.height && byte_per_pixel == o.byte_per_pixel
+			&& page_num == o.page_num && channel == o.channel
+			&& palette_size == o.palette_size && pixel_type == o.pixel_type
+			&& sample_per_pixel == o.sample_per_pixel && linestep == o.linestep)
+		{
+			state = false;
+		}
+		return state;
+	}
+
+};
+
+struct VIS_IMG_FILE_INFO
+{
+	IMG_UBYTE path[MAX_FILE_NAME];
+};
+
+struct edgeInformation
+{
+	IMG_ICOORD xyInteger; //像素点
+	IMG_RCOORD xyDecimal;//亚像素点
+	int gradient;//灰度梯度
+	int grayValue;//灰度值
+	float angle;//角度
+	bool operator == (const edgeInformation &value)
+	{
+		return (xyInteger.x == value.xyInteger.x&&
+			xyInteger.y == value.xyInteger.y&&
+			xyDecimal.x == value.xyDecimal.x&&
+			xyDecimal.y == value.xyDecimal.y&&
+			gradient == value.gradient&&
+			grayValue == value.grayValue&&
+			angle == value.angle);
+	}
+	edgeInformation& operator=(edgeInformation& value)
+	{
+		xyInteger.x = value.xyInteger.x;
+		xyInteger.y = value.xyInteger.y;
+		xyDecimal.x = value.xyDecimal.x;
+		xyDecimal.y = value.xyDecimal.y;
+		gradient = value.gradient;
+		grayValue = value.grayValue;
+		angle = value.angle;
+		return *this;
+	}
+};//边缘点 
+typedef struct _TIFF_FILE_INFORMATION
+{
+	IMG_RCOORD xyWorld;
+	IMG_RSIZE szWorldResolution;
+}VIS_TIFF_INFOMATION;
+
+class  DLLEXPORT CVisImage
 {
 public:
+	CVisImage();
+	~CVisImage();
+	CVisImage(IMG_SIZE szImage, IMG_UINT init_value = 0, CHANNEL_INFO channel = VIS_IMG_GRAY, PIXEL_TYPE type = VIS_IMG_UINT8);
+	CVisImage(const CVisImage &img);
+	operator IMG_UBBUF * ();
+	operator IMG_UBBUF();
+	operator IMG_WBUF * ();
+	operator IMG_WBUF();
+	operator IMG_RBUF * ();
+	operator IMG_RBUF();
+	//CVisImage(IMG_UBBUF img);			//create by reference
+	//CVisImage(IMG_UBBUF img[3]);
+	//CVisImage(IMG_WBUF img);
+	//CVisImage(IMG_RBUF img);
+	CVisImage(const IMG_UBBUF img);
+	CVisImage(const IMG_UBBUF img[3]);
+	CVisImage(const IMG_WBUF img);
+	CVisImage(const IMG_RBUF img);
+	static void ExitWriteThread(void);
+	IMG_INT Width() { return m_Imginfo.width; }
+	IMG_INT Height() { return m_Imginfo.height; }
+	IMG_INT GetChannels() { return (IMG_INT)m_Imginfo.channel; }
+	IMG_INT GetPageNum() { return m_Imginfo.page_num; }
+	PIXEL_TYPE GetPixelType() { return m_Imginfo.pixel_type; }
+	bool IsEmpty() { return Width()*Height() == 0; }
+	bool GetImageInfo(VIS_IMAGE_INFO &imginfo);
+	bool GetImageInfo(VIS_IMAGE_INFO &imginfo) const;
+	bool SetImageInfo(VIS_IMAGE_INFO &imginfo);
+	bool GetImagePlatte_BMP(IMG_UBYTE *img_platte, IMG_UINT &size);
+	bool SetImagePlatte_BMP(IMG_UBYTE *img_platte, IMG_UINT size);
+	bool SetImage(void **ppImage);
+	bool SetImage(const void **ppImage);
+	bool SetImage(const IMG_UBBUF &img);
+	bool SetImage(const IMG_UBBUF img[3]);
+	bool SetImage(const IMG_WBUF &img);
+	bool SetImage(const IMG_RBUF &img);
+	bool InitImage(IMG_SIZE szImage, IMG_UINT init_value = 0, CHANNEL_INFO channel = VIS_IMG_GRAY, PIXEL_TYPE type = VIS_IMG_UINT8);
+	bool GetImage(const void **ppImage) const;
+	bool GetImage(const IMG_UBBUF *pubbuf) const;
+	bool GetImage(const IMG_RBUF *pubbuf) const;
+	bool GetImage(const IMG_WBUF *pubbuf) const;
+	bool GetImage(void **ppImage);
+	bool GetImage(IMG_UBBUF *pubbuf);
+	bool GetImage(IMG_WBUF *pubbuf);
+	bool GetImage(IMG_RBUF *pubbuf);
+	bool GetImageByChannel(void *&ppImage, IMG_UINT ch); //Exemple: type BMP/JPG/PNG RGB, channel 1, ch = 1; type tiff 8 bits, Page 2 , ch = 2
+	bool ReadImage(const char* filename);
+	bool WriteImage(const char *filename);
+	bool WriteImage_Syn(const char *filename);
+	bool Reset();
+	bool CopyFrom(CVisImage &srcImage);
+	bool CopyFrom(const CVisImage &srcImage);
 
-	CVisEdge();
-	~CVisEdge();
+	//bool Split(void *pImage);
+	bool Merge(void *&pImage);
+	bool Add(CVisImage &srcImage);
+	bool Add_C(IMG_REAL num);
+	bool Sub(CVisImage &srcImage);
+	bool Sub_C(IMG_REAL num);
+	bool Mul(CVisImage &srcImage);
+	bool Mul_C(IMG_REAL num);
+	bool Div(CVisImage &srcImage);
+	bool Div_C(IMG_REAL num);
+	bool Abs(); // for 32 bits
+	bool Mean(IMG_LREAL& mean, IMG_INT channel = 0);
+	bool MaskMean(CVisImage &maskimg, IMG_LREAL &mean, IMG_INT channel = 0);
+	bool Sum(IMG_LREAL& sum, IMG_INT channel = 0);
+	bool Min(IMG_REAL& min, IMG_INT channel = 0);
+	bool Max(IMG_REAL& max, IMG_INT channel = 0);
+	bool Min_Index(IMG_REAL& min, IMG_INT& x, IMG_INT& y, IMG_INT channel = 0);
+	bool Max_Index(IMG_REAL& max, IMG_INT& x, IMG_INT& y, IMG_INT channel = 0);
+	bool And(CVisImage &srcImage); //byte only
+	bool Or(CVisImage &srcImage); //byte only
+	bool Xor(CVisImage &srcImage);//byte only
+	bool And_C(IMG_BYTE val); //byte only
+	bool Or_C(IMG_BYTE val); //byte only
+	bool Xor_C(IMG_BYTE val);//byte only
+	bool Not();
+	bool sqrt();
+	bool sqr();
+	bool Threshold(IMG_REAL thres, IMG_REAL thres_val, Threshold_TYPE thres_type);
+	bool Threshold_double(IMG_REAL LT, IMG_REAL LT_val, IMG_REAL GT, IMG_REAL GT_val);
+	bool Convert_8u_to_16s();
+	bool Convert_8u_to_32f();
+	bool Convert_16s_to_8u();
+	bool Convert_16s_to_32f();
+	bool Convert_32f_to_8u();
+	bool Convert_32f_to_16s();
+	bool ResizeLinear(IMG_REAL ScaleSize);
+	bool Crop(IMG_COORD start, IMG_SIZE dstsize);
+	bool FillPolygonByScanline(IMG_COORD points[], IMG_INT numPoints, void* value);
+	bool MesurementPolygonByScanline(IMG_COORD points[], IMG_INT numPoints, IMG_INT option, IMG_REAL* value);
+	bool Erosion(IMG_INT KernelSize);
+	bool Dilation(IMG_INT KernelSize);
+	bool Closing(IMG_INT Width, IMG_INT Height);
+	bool Opening(IMG_INT Width, IMG_INT Height);
+	bool Gradient(IMG_INT Width, IMG_INT Height);
+	bool Mirror(Axis axis);
+	bool RTS(IMG_RCOORD &rcoSrcCenter, IMG_RCOORD &rcoDstCenter, IMG_REAL rAngle, IMG_REAL rScale);
+	bool RTS(CVisImage &src, IMG_RCOORD &rcoSrcCenter, IMG_RCOORD &rcoDstCenter, IMG_REAL rAngle, IMG_REAL rScale);
+	bool FFT(CVisImage &fft_img);
+	bool Histogram(IMG_INT nBins, IMG_INT channel, IMG_REAL *pLevels, IMG_UINT* pHistVec);
+	bool FFT_Inv(CVisImage &Image_Inv, IMG_UINT Dst_Width, IMG_UINT Dst_Height);
+	bool SubImage(IMG_COORD start, IMG_SIZE size, CVisImage &subimage);
+	bool FilterGaussian(IMG_INT kernelSize, IMG_REAL sigma);
+	bool CenterOfMass(IMG_RCOORD& outputpoint);
+	bool Std(IMG_LREAL& std, IMG_LREAL& mean, IMG_INT channel = 0);
+	bool Brightness(IMG_REAL BrightLevel = 0);
+	bool Equalization(IMG_INT nBins);
+	bool FilterPrewittHorizBorder(IMG_INT masksize);
+	bool FilterPrewittVertBorder(IMG_INT masksize);
+	bool Contrast(IMG_REAL Threshold, IMG_REAL ContrastLevel);
+	bool FilterHiPass(IMG_INT kernelSize);
+	bool FilterLowPass(IMG_INT kernelSize);
+	bool FilterMax(IMG_INT masksize);
+	bool FilterMin(IMG_INT masksize);
+	bool FilterSobelHorizBorder(IMG_INT masksize);
+	bool FilterSobelVertBorder(IMG_INT masksize);
+	bool FilterSobelBorder(IMG_INT masksize);
+	bool FilterSobelSubpixel(IMG_INT masksize, edgeInformation *edgeArray, IMG_INT &eNum);
+	bool FilterMedian(IMG_INT masksize);
+	bool FilterMean(IMG_INT masksize);
+	bool CannyBorder(IMG_INT normsize, IMG_INT lowThresh, IMG_INT highThresh);
+	bool FilterLaplace(IMG_INT kernelSize);
+	bool FilterSharpen(IMG_INT kernelSize);
+	bool FilterBorder(IMG_WORD *pKernel, IMG_SIZE kernelSize);
+	bool Transpose();
+	bool CanvasSize(IMG_SIZE roisize, IMG_INT position = 22);
+	bool AddRandUniform(IMG_INT low, IMG_INT high, IMG_UINT pSeed);
+	bool AddRandGauss(IMG_INT mean, IMG_INT stDev, IMG_UINT pSeed);
+	bool CopyConstBorder(IMG_INT borderVal, IMG_INT borderWidth, IMG_INT borderHeight);
+	bool CopyMirrorBorder(IMG_INT borderWidth, IMG_INT borderHeight);
+	bool MaskImageMesurement(CVisImage &maskImage, Mesurement m, IMG_REAL* value);
+	bool ResizeLanczos(IMG_REAL ScaleSize);
+	bool ResizeNearest(IMG_REAL ScaleSize);
+	bool ResizeCubic(IMG_REAL ScaleSize, IMG_REAL value_B, IMG_REAL value_C);
+	bool RGBToGray();
+	bool GrayTo16Colors(CVisImage & colors_img);
+	bool Colors(IMG_INT R, IMG_INT G, IMG_INT B);
+	bool GrayToRGB();
+	bool DrawCircle(IMG_CIRCLE Circle, IMG_INT color);
+	bool DrawLine(IMG_RCOORD staPoint, IMG_RCOORD endPoint, IMG_INT color,IMG_INT lineWidth = 1);
+	bool DrawRect(IMG_WINDOW rectWin, IMG_INT color,IMG_INT lineWidth = 1);
+	bool DrawRect(IMG_RORECT rotateRect, IMG_INT color,IMG_INT lineWidth = 1);
+	bool DrawWindow(IMG_WINDOW roiWin, IMG_INT color, IMG_INT lineWidth = 1);
+	bool DrawPolygon(IMG_RCOORD *Point, IMG_INT color, IMG_INT numPoint);
+	bool DrawPoint(IMG_RCOORD *Point, IMG_INT numPoint, IMG_INT color);
+	bool DrawArrow(IMG_RCOORD start, IMG_RCOORD end, IMG_INT color);
+	bool DrawText_(const char* str, IMG_COORD leftUpCoor, IMG_INT color, int fontHeight, int fontThickness = 400, const char *fn = "Arial", bool italic = false, bool underline = false);
+	bool DrawMask(CVisImage &maskimg, IMG_INT color);
+	bool Min_Circumcircle(IMG_RCOORD *Point, IMG_INT numPoint, IMG_CIRCLE &Circle);
+	bool Min_CircumRorect(IMG_RCOORD *Point, IMG_INT numPoint, IMG_RORECT &RoRect);
+	bool ProjectVertical(IMG_VVOID *dst, IMG_INT size_dst, IMG_UWORD channel = 0);	//FOR UINT8 and WORD16, dst is LWORD, for REAL, dst is real
+	bool ProjectHorizon(IMG_VVOID *dst, IMG_INT size_dst, IMG_UWORD channel = 0);		//FOR UINT8 and WORD16, dst is LWORD, for REAL, dst is real
+	//bool Convolve_2D(CVisImage &dst, IMG_REAL *pKernelX, IMG_INT iKernelSizeX, IMG_REAL *pKernelY, IMG_INT iKernelSizeY);
 
-	void SetImage(IMG_UBBUF *img, IMG_UBBUF *mask = nullptr);
-	void SetLine(IMG_RCOORD lineStart, IMG_RCOORD lineEnd);
-	void SetLineWidth(IMG_REAL halfWidth);
-	void GetLineWidth(IMG_REAL &halfWidth);
-	void SetPixelOffset(IMG_REAL offset);
-	void SetGradKernal(IMG_INT kernal);
-	IMG_INT GetGradKernal(void){return m_iGradKernal;}
-	void SetGaussFilterPara(IMG_REAL sigmaWidth, IMG_REAL sigmaHeight, IMG_UINT kerWidth, IMG_UINT kerHeight);
-	void SetEdgeDir(EDGETYPE edgeDir);
-	void SetPriorSelect(EdgePriorSelect edgeSelect);
-	void SetMaxBlackWhiteCenterWidth(IMG_REAL width) { m_MaxBlackWhiteCenterWidth = width; }
-	void SetMinBlackWhiteCenterWidth(IMG_REAL width) { m_MinBlackWhiteCenterWidth = width; }
-	void SetGRADLEVEL_EDGE(GRADLEVEL_EDGE gradLevel, IMG_INT minGrad = 0);
-	void SetGradMethod(GradMethod gradMethod);
-	GradMethod GetGradMethod(void){return m_gradMethod;}
-	IMG_UINT GetEdgeNum(void){return m_ptNums;}
-	//if you malloc outside with size of GetEdgeNum(), it won't malloc inside,
-	//if you pass nullpointer, it would use "new" to malloc memory and pass it out. 
-	//you need to "delete" edge point after you have used it, or you will get memory leakage.
-	void GetEdgePts(IMG_RCOORD *&edgePts, IMG_INT &ptNums);
-	void GetEdge(IMG_RCOORD *&edgePts, IMG_REAL *&edgeMag, IMG_REAL *&edgeAngle, IMG_INT &ptNums);
-	void GetEdge(EDGE_INFORMATION *&edge, IMG_INT &ptNums);
-	void SetFindEdgeOption(FindEdgeOption Option) { m_iOption = Option; }
-	FindEdgeOption SetFindEdgeOption(void) { return m_iOption; }
-	IMG_VVOID SetDebug(const IMG_WORD debugflag, const IMG_CHAR *debugpath);
-	void GetDebug(IMG_UWORD &uwDebug) { uwDebug = m_uwDebug; }
-	void SetUseRoi(bool flag) { m_useROI = flag; }
-
-	void Serialize(CMEMPack &mp);
-	IMG_INT FindEdgePts();
+	bool SetTiffInformation(VIS_TIFF_INFOMATION *tifinfo);
+	VIS_TIFF_INFOMATION * GetTiffInformation(void) { return m_pTiffInfo; }
 private:
-	IMG_INT ROI_HORIZONTAL_ROTATION(const IMG_UBBUF &pSrc, const IMG_RCOORD &PointStart, const IMG_RCOORD &PointEnd, const IMG_REAL &NormalVari, RECTROIEDGE &RoiStruct, IMG_UBBUF &pubDst);
-	IMG_WORD DSP_RTS_R_8uC1(const IMG_UBBUF &prbSrc, const IMG_RCOORD &prcoSrcCenter, IMG_UBBUF &prbDst, const IMG_RCOORD &prcoDstCenter, const IMG_REAL &rAngle, const IMG_SIZE &pszOp);
-	IMG_WORD DSP_RTS_R_8uC1_Spec(const IMG_UBBUF &prbSrc, const IMG_RCOORD &prcoSrcCenter, IMG_UBBUF &prbDst, const IMG_RCOORD &prcoDstCenter, const int &nAngle_spec, const IMG_SIZE &pszOp);
-	IMG_INT ROI_ROTATION_COORDINATE_COMPUTE_IN_SOURCEIMAG_SL(const IMG_REAL &rAngle, const IMG_RCOORD &SrcCenterCo, const IMG_RCOORD &DstCenterCo, const IMG_RCOORD &RoiCo, IMG_RCOORD &RealCo);
-	IMG_INT GaussianFilter_2D(const IMG_UBYTE *src, const IMG_INT &roiWidth, const IMG_INT &roiHeight, const IMG_INT &kerWidth, const IMG_INT &kerHeight, const IMG_REAL &sigma_width, const IMG_REAL &sigma_height, IMG_UBYTE *&dst);
-	IMG_INT GaussianFilter_dim1_fixed(const IMG_UBYTE *src, const IMG_INT &srcWidth, const IMG_REAL &sigma, const IMG_UINT &kernelSize, IMG_UBYTE *dst);
-	IMG_VVOID GetGaussianKernel_dim1(IMG_REAL *&gaus, const IMG_UINT &size, const IMG_REAL &sigma);
-	IMG_INT Plot_Horizontal_Profile(const IMG_UBBUF &ubbSrc, IMG_RBUF &rbProfile);
-	IMG_INT Plot_Horizontal_Profile_Median(const IMG_UBBUF &ubbSrc, IMG_RBUF &rbProfile);
-	IMG_INT Plot_Gradient_Profile(const IMG_RBUF &ubbProfile_gray, IMG_RBUF &rbGraProfile, const IMG_INT &kerSize);
-	IMG_INT FindGravityPeak(const IMG_RBUF &srcBuf, const int &minThre, IMG_RCOORD *&EdgePts, IMG_REAL *&Magnitude, IMG_INT &edgeNums, const IMG_INT &kerSize);
-	IMG_INT  FindRisingEdge(const IMG_RBUF &srcBuf, const IMG_RBUF &srcGradBuf, const int &minThre, IMG_RCOORD *&EdgePts, IMG_REAL *&Magnitude, IMG_INT &edgeNums);
-	IMG_INT FittingGraPoints(const IMG_RBUF &rbProfile_gra, IMG_RCOORD *&EdgePts, IMG_INT &edgeNums, const GradMethod &gradMethod, const IMG_RBUF &gradProj);
-	int SigmoidFitting(const IMG_RBUF &srcImg, const IMG_INT &edgePt, const IMG_INT &kernal, double &dstEdge);
-	double SigmoidFun(const double &w, const double &x, const double &b, const double &c, const double &d);
-	double LossSum(const double &w, const double &b, const double &c, const double &d, IMG_LRCOORD *&coorEdge, const IMG_INT &edgeNums);
-	IMG_VVOID SearchNearCentPoint(IMG_RCOORD *srcPts, IMG_INT ptNums, const IMG_RCOORD &startPt, const IMG_RCOORD &endPt, IMG_INT &index);
-	IMG_REAL Edge_Dir(IMG_UBBUF mImage, IMG_RCOORD *pt);
-	double fast_exp(double y);
+	bool GrayToRGB(CVisImage &colors_img);
+	IMG_INT Type(const char* file);
+	void ExtractRGB(IMG_UBYTE* pointer, size_t size);
+	void WriteData(const int channel);
+	bool SetSubImage(void **ppImamge, IMG_UINT sub_start_x, IMG_UINT sub_start_y);
+	bool CanvasSizeTemp(IMG_INT srcStep, IMG_INT dstStep, IMG_INT channel, IMG_UBYTE *&pCopyVec, IMG_SIZE roisize, IMG_SIZE StrPoint);
+	bool getIntraClassVariance(IMG_UWORD* src, IMG_INT srcRows, IMG_INT srcCols, IMG_INT &varTh, IMG_REAL &varian);
 
-	double exp1(double x);
-
-	void logInit(char *filename);
-	void writeLog(char * msg, ...);
-	void logfinish();
-	void SaveOptionToHTMLLog(struct _HTMLLOGGING *pstLog);
-	void OutputEdgeTable(IMG_RCOORD *prcoEdge, IMG_REAL *Magnitude, IMG_REAL *Angle, IMG_INT num_edge, IMG_CHAR *title);
-	void OutputEdgeTable(vector<IMG_RCOORD> &pstEdge, IMG_REAL *Magnitude, IMG_REAL *Angle, IMG_CHAR *title);
-	void DrawResultImage(CVisImage &canvas);
-	void DrawChat(IMG_RBUF *data, CVisImage &canvas, IMG_UINT ptnum = 0, IMG_RCOORD *pt = nullptr);
-	
 private:
-	IMG_UBBUF m_Img;          // 图像输入
-	IMG_UBBUF m_Mask;
-	IMG_RCOORD m_lineStart; // 输入直线起点
-	IMG_RCOORD m_lineEnd; // 输入直线终点
-	IMG_REAL m_normalVari; // 直线半宽（默认0）
-	IMG_INT m_iGradKernal;         // 梯度核，默认3即1*3
-	IMG_REAL m_dGaussSigmaWidth, m_dGaussSigmaHeight;
-	IMG_INT m_dGaussKerWidth, m_dGaussKerHeight;
-	IMG_REAL m_MaxBlackWhiteCenterWidth, m_MinBlackWhiteCenterWidth;
-
-	EDGETYPE m_edgeDir;   // 边缘方向
-	EdgePriorSelect m_edgeSelect;  // 偏好筛选
-	GRADLEVEL_EDGE m_gradLevel;  // 梯度等级
-	GradMethod m_gradMethod;
-	IMG_INT m_iMinGrad;
-	FindEdgeOption m_iOption;
-
-	IMG_RCOORD *m_EdgePts;
-	IMG_REAL *m_Magnitude;
-	IMG_REAL *m_Angle;
-	IMG_INT m_ptNums;
-	IMG_REAL m_fOffset;
-	IMG_WINDOW m_ROI;
-	IMG_UWORD m_uwDebug;
-	IMG_CHAR m_strDebugPath[MAX_FILE_NAME];
-	struct  _HTMLLOGGING *m_pHtmlLog;
-	bool m_useROI;
+	IMG_UBYTE *m_arrPalette;
+	IMG_INT m_paletteSize = 0;
+	IMG_INT m_imageType;
+	IMG_BOOL m_bInternalMalloc;
+	VIS_IMAGE_INFO m_Imginfo;
+	char *m_FileName;
+	void **m_arrChannel;
+	VIS_TIFF_INFOMATION *m_pTiffInfo;
+	unsigned char * p_images;
+	bool m_isSubImage = false;
+public:
+	// // free and reset the image class
+	void Free();
+	void LightCorrectWithRefImage(CVisImage * pRefImage);
+	void GenerateLightReferenceImage(void);
 };
