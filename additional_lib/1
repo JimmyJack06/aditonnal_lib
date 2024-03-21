@@ -4091,7 +4091,7 @@ void CVisAlignSearch::writeLog(char *msg, ...)
 	HL_PutLine(m_pHtmlLog, buf);
 	va_end(argp);
 }
-typedef enum _SearchStatus
+typedef enum 
 {
 	fittingErr = -5,
 	backMatchErr = -4,
@@ -4412,7 +4412,7 @@ IMG_VVOID CVisAlignSearch::search(IMG_UBBUF & SrcImage, IMG_UBBUF *mask)
 	}	
 	pcount_before = pool.GetPushPopCount();
 
-	if (Align_VerifyBuildDate() == IMG_FALSE)
+	/*if (Align_VerifyBuildDate() == IMG_FALSE)
 	{
 		static thread_local int run_count = 0;
 		run_count++;
@@ -4451,7 +4451,7 @@ IMG_VVOID CVisAlignSearch::search(IMG_UBBUF & SrcImage, IMG_UBBUF *mask)
 		{
 			sts = false;
 		}
-	}
+	}*/
 
 	//gaussian
 	stAlignExData.preprocessInit(pool);
@@ -4802,17 +4802,6 @@ exit:
 		HL_PutLineBreak(m_pHtmlLog);
 		writeLog("searchStatus: %s \n", getErrorMessage(search_status));
 		logfinish();
-
-		IMG_CHAR searchPathName[FILENAME_MAX_LENGTH];
-		_snprintf(searchPathName, FILENAME_MAX_LENGTH, "%s\\searchResults.txt", m_SearchOption.GetDebugPath());
-		FILE *fileRes;
-		errno_t ret = fopen_s(&fileRes, searchPathName, "a");
-		if (ret == 0)
-		{
-			fprintf(fileRes, "LOG%05u : search_status = %s ,Total Object Num = %d\n", g_SearchLogIndex, getErrorMessage(search_status), m_AlignResult.Result()->size);
-		}
-		fclose(fileRes);
-
 	}
 }
 
@@ -6055,36 +6044,6 @@ void CVisAlignResult::SortByPosition(POS_SORT_METHOD method)
 				j = i+1;
 			}
 		}
-
-		//针对只有一行的工件特殊处理
-		auto distanceP2P = [&](const IMG_RCOORD& p1, const IMG_RCOORD& p2) {
-			return sqrt((p2.x - p1.x)*(p2.x - p1.x) + (p2.y - p1.y)*(p2.y - p1.y));
-		};
-
-		IMG_REAL objWidth = distanceP2P(m_result->ptr->arcoROICorner[0], m_result->ptr->arcoROICorner[1]);
-		IMG_REAL objHeight = distanceP2P(m_result->ptr->arcoROICorner[1], m_result->ptr->arcoROICorner[2]);
-
-		IMG_REAL *y_pos = (IMG_REAL *)pool.Malloc(sizeof(IMG_REAL)*m_result->size);
-		for (int i = 0; i < m_result->size; ++i)
-		{
-			y_pos[i] = m_result->ptr[i].rco.y;
-		}
-
-		bool doXSort = true;
-		IMG_REAL y_mid = y_pos[m_result->size / 2];
-		for (int i = 0; i < m_result->size; ++i) {
-			if (fabs(y_pos[i] - y_mid) > objWidth / 2 || fabs(y_pos[i] - y_mid) > objHeight / 2)
-			{
-				doXSort = false;
-				break;
-			}
-
-		}
-		if (doXSort)
-		{
-			SortByPosition(SORT_X);
-		}
-
 		break;
 
 	}
@@ -6135,38 +6094,6 @@ void CVisAlignResult::SortByPosition(POS_SORT_METHOD method)
 				j = i+1;
 			}
 		}
-
-		//针对只有一行的工件特殊处理
-		auto distanceP2P = [&](const IMG_RCOORD& p1, const IMG_RCOORD& p2) {
-			return sqrt((p2.x - p1.x)*(p2.x - p1.x) + (p2.y - p1.y)*(p2.y - p1.y));
-		};
-
-		IMG_REAL objWidth = distanceP2P(m_result->ptr->arcoROICorner[0], m_result->ptr->arcoROICorner[1]);
-		IMG_REAL objHeight = distanceP2P(m_result->ptr->arcoROICorner[1], m_result->ptr->arcoROICorner[2]);
-
-		IMG_REAL *x_pos = (IMG_REAL *)pool.Malloc(sizeof(IMG_REAL)*m_result->size);
-		for (int i = 0; i < m_result->size; ++i)
-		{
-			x_pos[i] = m_result->ptr[i].rco.x;
-		}
-
-		bool doYSort = true;
-		IMG_REAL x_mid = x_pos[m_result->size / 2];
-		for (int i = 0; i < m_result->size; ++i) {
-			if (fabs(x_pos[i] - x_mid) > objWidth / 2 || fabs(x_pos[i] - x_mid) > objHeight / 2)
-			{
-				doYSort = false;
-				break;
-			}
-
-		}
-		//fclose(fp);
-		if (doYSort)
-		{
-			SortByPosition(SORT_Y);
-		}
-
-
 		break;
 
 	}
@@ -6240,44 +6167,6 @@ void CVisAlignResult::SortByPosition(POS_SORT_METHOD method)
 				});
 				j = i + 1;
 			}
-		}
-
-
-		//针对只有一行的工件特殊处理
-		auto distanceP2P = [&](const IMG_RCOORD& p1, const IMG_RCOORD& p2) {
-			return sqrt((p2.x - p1.x)*(p2.x - p1.x) + (p2.y - p1.y)*(p2.y - p1.y));
-		};
-
-		IMG_REAL objWidth = distanceP2P(m_result->ptr->arcoROICorner[0], m_result->ptr->arcoROICorner[1]);
-		IMG_REAL objHeight = distanceP2P(m_result->ptr->arcoROICorner[1], m_result->ptr->arcoROICorner[2]);
-
-		IMG_REAL *y_pos = (IMG_REAL *)pool.Malloc(sizeof(IMG_REAL)*m_result->size);
-		for (int i = 0; i < m_result->size; ++i)
-		{
-			y_pos[i] = trans_y_f(m_result->ptr[i]);
-		}
-
-		bool doXSort = true;
-		IMG_REAL y_mid = y_pos[m_result->size / 2];
-		/*FILE *fp = fopen("zmzmjj.txt", "at");
-		if (fp)
-		{
-			fprintf(fp, "%f %f %f\n", y_mid, objWidth / 2, objHeight / 2);
-		}*/
-
-		for (int i = 0; i < m_result->size; ++i) {
-			//fprintf(fp, "%f \n", y_pos[i]);
-			if (fabs(y_pos[i] - y_mid) > objWidth / 2 || fabs(y_pos[i] - y_mid) > objHeight / 2)
-			{
-				doXSort = false;
-				break;
-			}
-
-		}
-		//fclose(fp);
-		if (doXSort)
-		{
-			SortByPosition(SORT_X);
 		}
 
 		break;
