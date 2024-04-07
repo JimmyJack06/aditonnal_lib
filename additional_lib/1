@@ -11,6 +11,7 @@
 #include <fstream>
 #include <iostream>
 using namespace std;
+
 //#include <VisAlign.h>
 //#define PI (3.1415926535898)
 extern std::timed_mutex g_logIndexLock;
