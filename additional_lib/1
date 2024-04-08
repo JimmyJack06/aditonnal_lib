@@ -13,7 +13,7 @@
 #include <VisClock.h>
 extern thread_local CVisClock *g_pstClock;
 extern thread_local IMG_ULWORD g_SearchLogIndex;
-#pragma comment(lib,"sec_x64.lib")
+
 
 #ifdef _OUTPUT_LOG
 #include <imdebug.h>
