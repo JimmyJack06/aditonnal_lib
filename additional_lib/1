@@ -47,7 +47,6 @@
 #define VIS_LOG_NORMAL (1)
 #define VIS_LOG_DETAIL (5)
 #define VIS_LOG_TIME (256)
-#define VIS_LOG_LEVEL
 #endif // !VIS_LOG_LEVEL
 
 #ifndef VI_BASETYPES_DEF
