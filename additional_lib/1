@@ -1,614 +1,235 @@
-
-
-#ifndef __SMARTCSS_VITYPE_H__
-#define __SMARTCSS_VITYPE_H__
-
-
-
-#ifndef FALSE
-#define FALSE               0
+#pragma once
+#include<math.h>
+#include <ViType.h>
+#include <string.h>
+#include"VisEdge.h"
+#include"VisClock.h"
+#include"Base.h"
+#include"VisEdgeFilter.h"
+#ifdef  VISSMOOTHFITTING_EXPORTS
+#define DLLEXPORT __declspec(dllexport)
+#else
+#define DLLEXPORT __declspec(dllimport) 
 #endif
+#define MAX_EQUATION_COEFF 10
+#define ISZERO(x)	(fabs(x) < 1e-5 ? true : false)
 
-#ifndef TRUE
-#define TRUE                1
-#endif
-
-#ifndef CONST
-#define CONST               const
-#endif
-
-#define FALSE   0
-#define TRUE    1
-#define NULL    0
-
-#ifndef VIS_ERR_MACRO
-#define VIS_ERR_MACRO
-#define VIS_ERR_INVALID_ARG		(-1)
-#define MEM_ERR_MALLOC			(-2)
-#define ALIGN_ERR_NO_OBJECT_FOUND (-4)
-#define ALIGN_ERR_INVALID_ARG	(-5)
-#define ALIGN_ERR_HS_NEIGH_SUM	(-6)
-#define VIS_ERR_OUT_ROI			(-7)
-#define VIS_ERR_INVALID_SIZE	(-8)
-#define VIS_ERR_OVERFLOW		(-9)
-#define VIS_ERR_NULLPTR			(-10)
-#define VIS_ERR_FAIL_IN_MKL		(-11)
-#define	VIS_ERR_FAIL_IN_IPPI	(-12)
-#define VIS_ERR_HEAP_DAMAGE		(-13)
-#define VIS_ERR_OPEN_FILE		(-14)
-#define VIS_ERR_LEARN_FAIL		(-15)
-#define VIS_ERR_MATH_ERR		(-16)
-#endif // !VIS_ERR_MACRO
-
-#ifndef VIS_LOG_LEVEL
-#define VIS_LOG_LEVEL
-#define VIS_LOG_NONE (0)
-#define VIS_LOG_SIMPLE (512)
-#define VIS_LOG_NORMAL (1)
-#define VIS_LOG_DETAIL (5)
-#define VIS_LOG_TIME (256)
-#endif // !VIS_LOG_LEVEL
-
-#ifndef VI_BASETYPES_DEF
-#define VI_BASETYPES_DEF
-typedef void				IMG_VVOID;
-typedef signed char			IMG_BYTE;
-typedef unsigned char		IMG_UBYTE;
-typedef signed short		IMG_WORD;
-typedef unsigned short		IMG_UWORD;
-typedef signed int			IMG_INT;
-typedef unsigned int		IMG_UINT;
-typedef signed long			IMG_LWORD;
-typedef unsigned long		IMG_ULWORD;
-typedef signed __int64		IMG_XLWORD;
-typedef unsigned __int64	IMG_UXLWORD;
-typedef float				IMG_REAL;
-typedef double				IMG_LREAL;
-typedef IMG_VVOID			*IMG_PVVOID;
-typedef IMG_BYTE			*IMG_PBYTE;
-typedef IMG_UBYTE			*IMG_PUBYTE;
-typedef IMG_WORD			*IMG_PWORD;
-typedef IMG_UWORD			*IMG_PUWORD;
-typedef IMG_INT				*IMG_PINT;
-typedef IMG_UINT			*IMG_PUINT;
-typedef IMG_LWORD			*IMG_PLWORD;
-typedef IMG_ULWORD			*IMG_PULWORD;
-typedef IMG_XLWORD			*IMG_PXLWORD;
-typedef IMG_UXLWORD			*IMG_PUXLWORD;
-typedef IMG_REAL			*IMG_PREAL;
-typedef IMG_LREAL			*IMG_PLREAL;
-typedef char				IMG_CHAR;
-typedef wchar_t				IMG_WCHAR;
-typedef int                 IMG_BOOL;
-typedef IMG_CHAR			*IMG_LPSTR;
-typedef IMG_WCHAR			*IMG_LPWSTR;
-typedef IMG_BOOL            *IMG_PBOOL;
-
-typedef IMG_VVOID			*IMG_PVIBASE;
-#endif  /* !VI_BASETYPES_DEF IMG*/
-
-
-
-
-typedef char CHAR;
-typedef wchar_t WCHAR;
-
-typedef WCHAR *PWCHAR, *LPWCH, *PWCH;
-typedef CONST WCHAR *LPCWCH, *PCWCH;
-
-typedef CHAR *PCHAR, *LPCH, *PCH;
-typedef CONST CHAR *LPCCH, *PCCH;
-
-
-typedef WCHAR *LPWSTR, *PWSTR;
-typedef CONST WCHAR *LPCWSTR, *PCWSTR;
-
-typedef CHAR *LPSTR, *PSTR;
-typedef CONST CHAR *LPCSTR, *PCSTR;
-
-
-
-#ifdef  UNICODE
-
-#ifndef _TCHAR_DEFINED
-typedef WCHAR TCHAR, *PTCHAR;
-typedef WCHAR TBYTE, *PTBYTE;
-#define _TCHAR_DEFINED
-#endif /* !_TCHAR_DEFINED */
-
-typedef LPWCH LPTCH, PTCH;
-typedef LPCWCH LPCTCH, PCTCH;
-typedef LPWSTR PTSTR, LPTSTR;
-typedef LPCWSTR PCTSTR, LPCTSTR;
-
-#else   /* UNICODE */               
-
-#ifndef _TCHAR_DEFINED
-typedef char TCHAR, *PTCHAR;
-typedef unsigned char TBYTE, *PTBYTE;
-#define _TCHAR_DEFINED
-#endif /* !_TCHAR_DEFINED */
-
-typedef LPCH LPTCH, PTCH;
-typedef LPCCH LPCTCH, PCTCH;
-typedef LPSTR PTSTR, LPTSTR;
-typedef LPCSTR PCTSTR, LPCTSTR;
-
-#endif /* UNICODE */ 
-
-
-enum class EDGETYPE {
-	ANY,	//for line ,extract line with both light and dark edge.
-	LIGHT2DARK,
-	DARK2LIGHT,
-	WHITECENTER,
-	BLACKCENTER,
-	BOTH, //for line, extract both light and dark line, but for single line only one kind of edge would be effective
-	WHITEWIDTH,
-	BLACKWIDTH
-};
-
-typedef struct _IMG_COORD
+namespace curvefitting
 {
-	IMG_INT		x;
-	IMG_INT		y;
-} IMG_COORD;
-typedef struct _IMG_WCOORD
-{
-	IMG_WORD		x;
-	IMG_WORD		y;
-} IMG_WCOORD;
-
-typedef struct _IMG_ICOORD
-{
-	IMG_INT     x;
-	IMG_INT     y;
-} IMG_ICOORD;
-
-typedef struct _IMG_RCOORD
-{
-	IMG_REAL     x;
-	IMG_REAL     y;
-} IMG_RCOORD;
-
-typedef struct _IMG_LRCOORD
-{
-	IMG_LREAL     x;
-	IMG_LREAL     y;
-} IMG_LRCOORD;
-
-typedef struct _IMG_POSITION
-{
-	IMG_RCOORD coord;
-	IMG_LREAL  angle;
-} IMG_POSITION;
-
-typedef struct _IMG_RCOORD3D
-{
-	IMG_REAL x, y, z;
-} IMG_RCOORD3D;
-
-typedef struct _IMG_SIZE
-{
-	IMG_INT		width;
-	IMG_INT		height;
-} IMG_SIZE;
-
-typedef struct _IMG_ISIZE
-{
-	IMG_UINT     width;
-	IMG_UINT     height;
-} IMG_ISIZE;
-
-typedef struct _IMG_RSIZE
-{
-	IMG_REAL        width;
-	IMG_REAL        height;
-} IMG_RSIZE;
-
-typedef struct _IMG_UWSIZE
-{
-	IMG_UWORD		width;
-	IMG_UWORD		height;
-} IMG_UWSIZE;
-
-typedef struct _IMG_BBUF
-{
-	IMG_BYTE  *ptr;      /* pointer to the image buffer start address */
-	IMG_SIZE  size;
-	IMG_INT		linestep;  /* offset from one row of image buffer to
-						   another on the same column in term of pixel */
-} IMG_BBUF;
-
-typedef struct _IMG_UBBUF
-{
-	IMG_UBYTE  *ptr;
-	IMG_SIZE   size;
-	IMG_INT		linestep; /* offset from one row of image buffer to
-						  another on the same column in term of pixel */
-} IMG_UBBUF;
-
-typedef struct _IMG_WBUF
-{
-	IMG_WORD  *ptr;
-	IMG_SIZE  size;
-	IMG_INT		linestep;  /* offset from one row of image buffer to
-						   another on the same column in term of pixel */
-} IMG_WBUF;
-
-typedef struct _IMG_UWBUF
-{
-	IMG_UWORD  *ptr;
-	IMG_SIZE   size;
-	IMG_INT		linestep; /* offset from one row of image buffer to
-						  another on the same column in term of pixel */
-} IMG_UWBUF;
-
-typedef struct _IMG_LWBUF
-{
-	IMG_LWORD  *ptr;
-	IMG_SIZE   size;
-	IMG_INT		linestep; /* offset from one row of image buffer to
-						  another on the same column in term of pixel */
-} IMG_LWBUF;
-
-typedef struct _IMG_ULBUF
-{
-	IMG_ULWORD *ptr;
-	IMG_SIZE   size;
-	IMG_INT		linestep; /* offset from one row of image buffer to
-						  another on the same column in term of pixel */
-} IMG_ULBUF;
-
-typedef struct _IMG_RBUF
-{
-	IMG_REAL  *ptr;
-	IMG_SIZE  size;
-	IMG_INT		linestep;  /* offset from one row of image buffer to
-						   another on the same column in term of pixel */
-} IMG_RBUF;
-
-typedef struct _IMG_LRBUF
-{
-	IMG_LREAL *ptr;
-	IMG_SIZE  size;
-	IMG_INT		linestep;  /* offset from one row of image buffer to
-						   another on the same column in term of pixel */
-} IMG_LRBUF;
-
-typedef struct _IMG_VVBUF
-{
-	IMG_VVOID *ptr;
-	IMG_SIZE  size;
-	IMG_INT		linestep;  /* offset from one row of image buffer to
-						   another on the same column in term of pixel */
-} IMG_VVBUF;
-
-typedef struct _IMG_UXLBUF
-{
-	IMG_UXLWORD	*ptr;
-	IMG_SIZE	size;
-	IMG_INT		linestep;
-} IMG_UXLBUF;
-
-typedef struct _IMG_WINDOW
-{
-	IMG_COORD	coWindowOff;
-	IMG_SIZE	szWindowSize;
-} IMG_WINDOW;
-
-
-typedef struct _IMG_ParallelLINE
-{
-	IMG_RCOORD startPt1;
-	IMG_RCOORD endPt1;
-	IMG_RCOORD startPt2;
-	IMG_RCOORD endPt2;
-	IMG_REAL a;
-	IMG_REAL b;
-	IMG_REAL c1;
-	IMG_REAL c2;
-}IMG_ParallelLINE;
-
-/*
-* ROI define start
-*/
-typedef struct _IMG_LINE
-{
-	IMG_RCOORD startPt;
-	IMG_RCOORD endPt;
-	IMG_REAL a;
-	IMG_REAL b;
-	IMG_REAL c;
-	EDGETYPE edgeType;
-}IMG_LINE;
-
-typedef struct _IMG_RECT
-{
-	IMG_RCOORD	center;
-	IMG_RSIZE	size;
-
-	//IMG_RECT()
-	//{
-	//	center.x = 50.0f;
-	//	center.y = 50.0f;
-	//	size.width = 50.0f;
-	//	size.height = 40.0f;
-	//}
-	//IMG_RECT(IMG_INT centerX, IMG_INT centerY, IMG_INT width, IMG_INT height)
-	//{
-	//	center.x = (IMG_REAL)centerX;
-	//	center.y = (IMG_REAL)centerY;
-	//	size.width = (IMG_REAL)width;
-	//	size.height = (IMG_REAL)height;
-	//}
-	//IMG_RECT(IMG_REAL centerX, IMG_REAL centerY, IMG_REAL width, IMG_REAL height)
-	//{
-	//	center.x = centerX;
-	//	center.y = centerY;
-	//	size.width = width;
-	//	size.height = height;
-	//}
-	//IMG_RECT(IMG_RCOORD c, IMG_RSIZE s)
-	//{
-	//	center.x = c.x;
-	//	center.y = c.y;
-	//	size.width = s.width;
-	//	size.height = s.height;
-	//}
-	//IMG_RECT(IMG_ICOORD c, IMG_ISIZE s)
-	//{
-	//	center.x = (IMG_REAL)c.x;
-	//	center.y = (IMG_REAL)c.y;
-	//	size.width = (IMG_REAL)s.width;
-	//	size.height = (IMG_REAL)s.height;
-	//}
-}IMG_RECT;
-
-typedef struct _IMG_RORECT
-{
-	IMG_RCOORD	center;
-	IMG_RSIZE	size;
-	IMG_LREAL	angle; //逆时针角度(0 - 360)
-
-					   //IMG_RORECT()
-					   //{
-					   //	center.x = 0;
-					   //	center.y = 0;
-					   //	size.width = 0;
-					   //	size.height = 0;
-					   //	angle = 0;
-					   //}
-					   //IMG_RORECT(IMG_INT centerX, IMG_INT centerY, IMG_INT width, IMG_INT height, IMG_LREAL a)
-					   //{
-					   //	center.x = (IMG_REAL)centerX;
-					   //	center.y = (IMG_REAL)centerY;
-					   //	size.width = (IMG_REAL)width;
-					   //	size.height = (IMG_REAL)height;
-					   //	angle = a;
-					   //}
-					   //IMG_RORECT(IMG_REAL centerX, IMG_REAL centerY, IMG_REAL width, IMG_REAL height, IMG_LREAL a)
-					   //{
-					   //	center.x = centerX;
-					   //	center.y = centerY;
-					   //	size.width = width;
-					   //	size.height = height;
-					   //	angle = a;
-					   //}
-					   //IMG_RORECT(IMG_RCOORD c, IMG_RSIZE s, IMG_LREAL a)
-					   //{
-					   //	center.x = c.x;
-					   //	center.y = c.y;
-					   //	size.width = s.width;
-					   //	size.height = s.height;
-					   //	angle = a;
-					   //}
-					   //IMG_RORECT(IMG_ICOORD c, IMG_ISIZE s, IMG_LREAL a)
-					   //{
-					   //	center.x = (IMG_REAL)c.x;
-					   //	center.y = (IMG_REAL)c.y;
-					   //	size.width = (IMG_REAL)s.width;
-					   //	size.height = (IMG_REAL)s.height;
-					   //	angle = (IMG_REAL)a;
-					   //}
-}IMG_RORECT;
-
-typedef struct _IMG_POLYGON
-{
-	IMG_INT     count;
-	IMG_RCOORD* pCoods;
-
-	//IMG_POLYGON()
-	//{
-	//	count = 3;
-	//	pCoods = new IMG_RCOORD[3];
-	//	pCoods[0].x = 50.0f;
-	//	pCoods[0].y = 10.0f;
-	//	pCoods[1].x = 10.0f;
-	//	pCoods[1].y = 50.0f;
-	//	pCoods[2].x = 90.0f;
-	//	pCoods[2].y = 50.0f;
-	//}
-	//IMG_POLYGON(IMG_RCOORD* pPoints, IMG_INT nPtCount)
-	//{
-	//	count = nPtCount;
-	//	pCoods = new IMG_RCOORD[count];
-	//	for (int i = 0; i < count; i++)
-	//	{
-	//		pCoods[i].x = (IMG_REAL)pPoints[i].x;
-	//		pCoods[i].y = (IMG_REAL)pPoints[i].y;
-	//	}
-	//}
-	//IMG_POLYGON(IMG_ICOORD* pPoints, IMG_INT nPtCount)
-	//{
-	//	count = nPtCount;
-	//	pCoods = new IMG_RCOORD[count];
-	//	for (int i = 0; i < count; i++)
-	//	{
-	//		pCoods[i].x = (IMG_REAL)pPoints[i].x;
-	//		pCoods[i].y = (IMG_REAL)pPoints[i].y;
-	//	}
-	//}
-}IMG_POLYGON;
-
-typedef struct _IMG_CIRCLE
-{
-	IMG_RCOORD	center;
-	IMG_REAL	radius;
-
-	//IMG_CIRCLE()
-	//{
-	//	center.x = 100;
-	//	center.y = 100;
-	//	radius = 22;
-	//}
-	//IMG_CIRCLE(IMG_RCOORD ct, IMG_LREAL r)
-	//{
-	//	center = ct;
-	//	radius = (IMG_REAL)r;
-	//}
-}IMG_CIRCLE;
-
-typedef struct _IMG_RING
-{
-	IMG_RCOORD	center;
-	IMG_REAL	radius1;
-	IMG_REAL	radius2;
-
-	//IMG_RING()
-	//{
-	//	center.x = 0;
-	//	center.y = 0;
-	//	radius1 = 0;
-	//	radius2 = 0;
-	//}
-	//IMG_RING(IMG_RCOORD cnt, IMG_LREAL r1, IMG_LREAL r2)
-	//{
-	//	center = cnt;
-	//	radius1 = (IMG_REAL)r1;
-	//	radius2 = (IMG_REAL)r2;
-	//}
-}IMG_RING;
-
-struct IMG_ARCRING
-{
-	IMG_RCOORD	center;	
-	IMG_REAL radiusi;	
-	IMG_REAL radiuso;	
-	IMG_REAL start_angle;	
-	IMG_REAL end_angle;
-};
-
-typedef struct _IMG_ARCT
-{
-	IMG_RCOORD center;
-	IMG_REAL radius;
-	IMG_REAL start_angle;
-	IMG_REAL end_angle;
-}IMG_ARCT;
-
-typedef struct _IMG_ELLIPSE
-{
-	IMG_REAL a = 0, b = 0, c = 0, d = 0, e = 0, f = 0;
-	IMG_RCOORD	rco;
-	IMG_REAL axis_a;
-	IMG_REAL axis_b;
-	IMG_REAL angle;
-}IMG_ELLIPSE;
-
-/*
-* ROI define end
-*/
-
-
-// namespace vi
-// {
-/*
-* VI_VARENUM usage key,
-*/
-enum /*VI_VARENUM*/VIVARTYPE
-{
-	TYPE_EMPTY = 0,
-	TYPE_BYTE = 1,
-	TYPE_UBYTE = 2,
-	TYPE_WORD = 3,
-	TYPE_UWORD = 4,
-	TYPE_INT = 5,
-	TYPE_UINT = 6,
-	TYPE_LWORD = 7,
-	TYPE_ULWORD = 8,
-	TYPE_XLWORD = 9,
-	TYPE_UXLWORD = 10,
-	TYPE_REAL = 11,
-	TYPE_LREAL = 12,
-
-	TYPE_PPVOID = 100,
-	TYPE_PBYTE = 101,
-	TYPE_PUBYTE = 102,
-	TYPE_PWORD = 103,
-	TYPE_PUWORD = 104,
-	TYPE_PINT = 105,
-	TYPE_PUINT = 106,
-	TYPE_PLWORD = 107,
-	TYPE_PULWORD = 108,
-	TYPE_PXLWORD = 109,
-	TYPE_PUXLWORD = 110,
-	TYPE_PREAL = 111,
-	TYPE_PLREAL = 112,
-	TYPE_LPSTR = 113,
-	TYPE_LPWSTR = 114,
-	TYPE_PATH = 115,
-
-	TYPE_PVIVARIANT = 160,
-	TYPE_LPVIBASE = 161
-};
-
-//typedef unsigned short VIVARTYPE;
-
-typedef struct tagVIVARIANT {
-	VIVARTYPE vt;
-	union
+	enum ControlType
 	{
-		//TYPE_EMPTY = 0,
-		IMG_BYTE		cVal;		//TYPE_BYTE = 1,
-		IMG_UBYTE		ucVal;		//TYPE_UBYTE = 2,
-		IMG_WORD		wVal;		//TYPE_WORD = 3,
-		IMG_UWORD		uwVal;		//TYPE_UWORD = 4,
-		IMG_INT			iVal;		//TYPE_INT = 5,
-		IMG_UINT		uiVal;		//TYPE_UINT = 6,
-		IMG_LWORD		lwVal;		//TYPE_LWORD = 7,
-		IMG_ULWORD		ulwVal;		//TYPE_ULWORD = 8,
-		IMG_XLWORD		xlwVal;		//TYPE_XLWORD = 9,
-		IMG_UXLWORD		uxlwVal;	//TYPE_UXLWORD = 10,
-		IMG_REAL		rVal;		//TYPE_REAL = 11,
-		IMG_LREAL		lrVal;		//TYPE_LREAL = 12,
+		NOORDER = -1,
+		ZEROORDER = 0,
+		ONEORDER = 1,
+		TWOORDER = 2
+	};
 
-		IMG_PVVOID		pVoid;		//TYPE_PPVOID = 100,
-		IMG_PBYTE		pcVal;		//TYPE_PBYTE = 101,
-		IMG_PUBYTE		pucVal;		//TYPE_PUBYTE = 102,
-		IMG_PWORD		pwVal;		//TYPE_PWORD = 103,
-		IMG_PUWORD		puwVal;		//TYPE_PUWORD = 104,
-		IMG_PINT		piVal;		//TYPE_PINT = 105,
-		IMG_PUINT		puiVal;		//TYPE_PUINT = 106,
-		IMG_PLWORD		plwVal;		//TYPE_PLWORD = 107,
-		IMG_PULWORD		pulwVal;	//TYPE_PULWORD = 108,
-		IMG_PXLWORD		pxlwVal;	//TYPE_PXLWORD = 109,
-		IMG_PUXLWORD	puxlwVal;	//TYPE_PUXLWORD = 110,
-		IMG_PREAL		prVal;		//TYPE_PREAL = 111,
-		IMG_PLREAL		plrVal;		//TYPE_PLREAL = 112,
-		IMG_LPSTR		pszVal;		//TYPE_LPSTR = 113,
-		IMG_LPWSTR		pwszVal;	//TYPE_LPWSTR = 114,
-		IMG_PBYTE		pPath;		//TYPE_PATH = 115,
+	struct VIS_EQUATION
+	{
+		double equCoeff[MAX_EQUATION_COEFF];  // a+bx+cx^2+dx^3...
+		IMG_INT equPara;    // 参数可用个数，3维4个系数
+		IMG_LRCOORD limits;    // 参数范围
+		VIS_EQUATION()
+		{
+			memset(equCoeff, 0, sizeof(double)*MAX_EQUATION_COEFF);
+			equPara = 0;
+			limits.x = 0.0;
+		}
+		void init(IMG_INT para)
+		{
+			memset(equCoeff, 0, sizeof(double)*MAX_EQUATION_COEFF);
+			equPara = para;
+		}
+	};
 
-		tagVIVARIANT*	pvtVal;		//TYPE_PVIVARIANT = 160,
-		IMG_PVIBASE     pvibVal;	//TYPE_LPVIBASE = 161,
-	} Val;
+	struct EDGEPARA
+	{
+		IMG_REAL m_normalVari; // 直线半宽（默认0）
+		IMG_INT m_iGradKernal;         // 梯度核，默认3即1*3
+		IMG_REAL m_dGaussSigmaWidth, m_dGaussSigmaHeight;
+		IMG_INT m_dGaussKerWidth, m_dGaussKerHeight;
 
-} VIVARIANT, *PVIVARIANT;
+		EDGETYPE m_edgeDir;   // 边缘方向
+		EdgePriorSelect m_edgeSelect;  // 偏好筛选
+		GRADLEVEL_EDGE m_gradLevel;  // 梯度等级
+		GradMethod m_gradMethod;
+		IMG_INT m_iMinGrad;
+		IMG_REAL m_fOffset;
+		EDGEPARA()
+		{
+			m_fOffset = 0.f;
+			m_normalVari = 0.f;
+			m_iGradKernal = 3;
+			m_dGaussSigmaWidth = m_dGaussSigmaHeight = 0.f;
+			m_dGaussKerWidth = m_dGaussKerHeight = 0;
+			m_edgeDir = EDGETYPE::ANY;
+			m_edgeSelect = EdgePriorSelect::NEARCENTER;
+			m_gradLevel = GRADLEVEL_EDGE::NORMAL;
+			m_gradMethod = GradMethod::EDGE_QUADRATIC;
+			m_iMinGrad = 10;
+		}
+	};
 
-//}
+	enum VIS_CURVE_TYPE
+	{
+		B_SPLINE,
+		NURBS
+	};
 
-typedef void(__stdcall *TEMP_IMAGE_CALLBACK)(void* callBackOwner, IMG_UBYTE* pData, int nDataSiz, int wid, int het, int channel);
+	struct VIS_POINT_PAIR
+	{
+		IMG_LRCOORD edgePt;
+		IMG_LRCOORD curvePt;
+		IMG_LREAL ptDis;
+		IMG_LREAL coeffVal;
+		IMG_INT searchNums;
+	};
 
-#endif
-/* End of file. */
+	struct PARA_POINT
+	{
+		IMG_LREAL para;
+		IMG_LRCOORD pt;
+	};
+
+	struct VIS_PARA_EQUATION
+	{
+		VIS_EQUATION xEqu;
+		VIS_EQUATION yEqu;
+		IMG_LRCOORD limits;    // 参数范围
+		IMG_LRCOORD startPt, endPt;
+		VIS_PARA_EQUATION()
+		{
+			limits.x = 0.0; limits.y = 0.0;
+			startPt = { 0.0,0.0 }; endPt = { 0.0, 0.0 };
+		}
+	};
+}
+using namespace curvefitting;
+
+class DLLEXPORT CVisCurveFitting
+{
+public:
+	CVisCurveFitting();
+	CVisCurveFitting(const CVisCurveFitting&curve);
+	CVisCurveFitting& operator=(const CVisCurveFitting&curve);
+	virtual~CVisCurveFitting();
+	IMG_VVOID SetClosed(bool isClosed);
+	bool GetClosed();
+	IMG_INT SetInputPara(IMG_RCOORD *coor, IMG_INT nums, IMG_INT dims, VIS_CURVE_TYPE curveType = VIS_CURVE_TYPE::B_SPLINE, IMG_REAL *weight = nullptr, IMG_INT weightNums = 0);
+	IMG_INT SetDebugMode(bool debug, char* path);
+	IMG_VVOID SetImage(IMG_UBBUF img);
+	IMG_VVOID SetMask(IMG_UBBUF* mask);
+	IMG_VVOID SetControlType(curvefitting::ControlType type);
+	IMG_VVOID SetEdgePara(EDGEPARA edgePara);
+	IMG_VVOID SetEdgeSearLength(IMG_REAL len);
+	IMG_VVOID GetCurvePts(IMG_INT regionSample, PARA_POINT *&coor, IMG_INT &nums, PARA_POINT *&upCoor, PARA_POINT *&downCoor, IMG_RCOORD &midVec);
+	//IMG_VVOID SetCurveType(VIS_CURVE_TYPE curveType, IMG_REAL *weight = nullptr, IMG_INT nums = 0); // 类型为NURBS时后面两个参数有效
+	IMG_VVOID SetEdgeControlPts(IMG_RCOORD *coor, IMG_INT nums);
+	IMG_VVOID SetSampleInRegion(IMG_INT sample);
+	IMG_INT SetCurveNode(IMG_INT nums);
+	IMG_VVOID SetFittingPara(IMG_REAL sigma, IMG_REAL sigmaCont, IMG_UINT times, IMG_REAL precision);
+
+	IMG_INT CurveFitting();
+	IMG_INT ClosedCurveFitting();
+
+	IMG_VVOID GetCoeffEquNums(IMG_INT &nums);
+	IMG_VVOID GetCoeffEqu(VIS_PARA_EQUATION *&numeratorEqu, VIS_PARA_EQUATION *&denominatorEqu, IMG_INT nums);
+	IMG_VVOID GetCurveNodeNums(IMG_INT &nums);
+	IMG_VVOID GetCurveNode(IMG_REAL *&node);
+	IMG_VVOID GetCurveWeightNums(IMG_INT &nums);
+	IMG_VVOID GetCurveWeight(IMG_REAL *&weight);
+
+	IMG_VVOID GetCurveEdge(IMG_INT regionSample, PARA_POINT *&coor, IMG_INT &nums);
+	IMG_VVOID GetCurveEdge(IMG_INT regionSample, IMG_LREAL norLength, PARA_POINT *&coor, IMG_INT &nums, PARA_POINT *&upCoor, PARA_POINT *&downCoor, IMG_LRCOORD &meanUp, IMG_LRCOORD &meanDown);
+	IMG_VVOID GetClosedCurveEdge(IMG_INT regionSample, IMG_LREAL norLength, PARA_POINT *&coor, IMG_INT &nums,
+		PARA_POINT *&upCoor, PARA_POINT *&downCoor, IMG_LRCOORD &meanPt);
+	IMG_VVOID GetCurveCorssLine(IMG_INT Sample, IMG_RCOORD startPt, IMG_RCOORD endPt, PARA_POINT *&coor, IMG_INT &nums);
+	//IMG_VVOID GetCurveCorssArc(IMG_RCOORD startPt, IMG_RCOORD endPt, PARA_POINT *&coor, IMG_INT &nums);
+	IMG_VVOID GetCurveCorssCircle(IMG_INT Sample, IMG_CIRCLE circle, PARA_POINT *&coor, IMG_INT &nums);
+	IMG_VVOID GetCurveLength(PARA_POINT pt1, PARA_POINT pt2, IMG_INT regionSample, IMG_REAL &length);
+
+	IMG_VVOID GetClosedCurveEdge(IMG_INT regionSample, curvefitting::PARA_POINT *&coor, IMG_INT &nums, IMG_REAL &length);
+	IMG_VVOID GetClosedCurveCorssLine(IMG_INT Sample, IMG_RCOORD startPt, IMG_RCOORD endPt, curvefitting::PARA_POINT *&coor, IMG_INT &nums);
+	IMG_VVOID GetClosedCurveCorssCircle(IMG_INT Sample, IMG_CIRCLE circle, curvefitting::PARA_POINT *&coor, IMG_INT &nums);
+	IMG_VVOID GetClosedCurveLength(curvefitting::PARA_POINT pt1, curvefitting::PARA_POINT pt2, IMG_INT regionSample, IMG_REAL &length);
+	IMG_REAL GetClosedCurveLength(IMG_REAL ItePrecision);
+	IMG_REAL m_rCurveLength;
+	IMG_REAL m_rEdgeLength;
+private:
+	bool m_bIsClosed;
+	IMG_UBBUF m_ubbufSrc;
+	IMG_UBBUF* m_ubbufMask;
+	bool m_bDebug;
+	char debugPath[256];
+	//CVisClock m_clock;
+	curvefitting::ControlType m_ContType;     // 约束条件，默认0阶约束 
+	IMG_RCOORD *m_coorInput;   // 输入的控制点（基函数个数）
+	IMG_INT m_iPtNums;  
+	IMG_REAL m_xRange;
+	IMG_REAL m_yRange;
+	IMG_REAL m_xMin;
+	IMG_REAL m_yMin;
+	IMG_REAL *m_rNode;       // 根据控制点生成的节点数 
+	IMG_INT m_iNodeNums;
+	IMG_INT m_iDims;         // 曲线维数，默认3
+
+	//IMG_INT  m_regionNum;    // 曲线节点区间数目（=m_iNodeNums - 2*(dims+1）+1）0000 1111
+	//VIS_EQUATION **m_NodeFun;      // 节点函数，个数为（（dims+1）*每一维的基函数个数*区间数）
+	//IMG_INT m_iFunBase;
+	VIS_PARA_EQUATION *m_paraEqu;  // 曲线方程结果，分段函数
+	VIS_PARA_EQUATION *m_deriEqu;
+	IMG_INT m_iParaEquNums;       // 曲线方程个数
+	VIS_CURVE_TYPE m_curveType;  // 需要生成的曲线类型，B-Spline或者NURBS（B-Spline是NURBS的特色形式，当权因子都为1时退化为B-Spline）
+	//IMG_REAL *m_pCoorWeight;     // 曲线为NURBS时的权因子，个数和控制点相等
+	//IMG_INT m_WeightNums;
+	//VIS_PARA_EQUATION *m_paraEqu_deno;  // NURBS曲线的分母
+	VIS_EQUATION *m_NodeFun;
+	IMG_SIZE m_szNodeFun;
+	IMG_RCOORD *m_pcoorEdgeCont;
+	IMG_INT m_iEdgeCont;
+
+	EDGEPARA m_edgePara;   // 边缘参数
+	IMG_REAL m_rSearLen;   // 搜索的边缘长度
+	IMG_INT m_regSample;   // 搜索边缘点的采样个数，每个区间内采样个数
+
+	VIS_POINT_PAIR *m_ptPair; // 搜索到的点对以及拟合的参数
+	IMG_INT m_ptPairNums;
+	IMG_REAL *rFittingNode;
+	IMG_INT m_iFittingNodeNums;
+	IMG_REAL *pWeight;
+	IMG_INT m_iWeightNums;
+	//VIS_EQUATION *FittingBaseEqu;
+	//IMG_INT m_FitEquWidth;
+	//IMG_INT m_FitEquHeight;
+	VIS_EQUATION *m_pDisEqu;
+	IMG_INT m_iDisEquNums;
+
+	IMG_REAL m_sigma;
+	IMG_REAL m_contSigma;
+	IMG_REAL m_addSigma;
+	IMG_UINT m_iterNums;
+	IMG_REAL m_precision;
+	curvefitting::VIS_EQUATION *m_ClosedBaseFun;
+	IMG_INT m_ClosedBaseFunNums;
+private:
+
+	IMG_INT NodeVector(IMG_REAL*NodeVector, IMG_INT nodeNums, IMG_INT dims, bool bRepNode);
+	
+	IMG_INT SearchPointPair(IMG_UBBUF &srcImg, VIS_PARA_EQUATION *&upEqu,/* VIS_PARA_EQUATION *&downEqu,*/ IMG_INT equNums);
+	IMG_INT SearchPointPair_closed(IMG_UBBUF &srcImg, VIS_PARA_EQUATION *&upEqu/*, VIS_PARA_EQUATION *&downEqu*/, IMG_INT equNums);
+
+	IMG_REAL ComputeVecDis(IMG_RCOORD srcStart, IMG_RCOORD srcEndt, IMG_RCOORD dstStart, IMG_RCOORD dstEnd);  // 左手定则，计算矢量距离
+	IMG_REAL BaseFunction(IMG_INT index, IMG_INT dims, IMG_REAL*NodeVector, IMG_INT nodeNums, IMG_REAL input);
+	IMG_INT WeightFunction(VIS_POINT_PAIR *&pointPair, const IMG_INT ptPairNums, IMG_REAL **pBaseFunVal, IMG_INT baseFunNums,
+		IMG_INT dataNums, IMG_REAL &Sigma, IMG_REAL &SigmaCont, IMG_REAL &addSigma, const IMG_UINT &IteMaxTimes, const IMG_REAL &ItePrecision);
+	IMG_INT WeightFunction(curvefitting::VIS_POINT_PAIR *&pointPair, const IMG_INT ptPairNums,
+		IMG_REAL &Sigma, IMG_REAL &SigmaCont, IMG_REAL &addSigma, const IMG_UINT &IteMaxTimes, const IMG_REAL &ItePrecision);
+	bool LineCrossLine(IMG_RCOORD line1Start, IMG_RCOORD line1End, IMG_RCOORD line2Start, IMG_RCOORD line2End, IMG_RCOORD &dst);
+	bool PointInLine(IMG_RCOORD lineStart, IMG_RCOORD lineEnd, IMG_RCOORD pt);
+	IMG_INT AddEdgeControlPts(const IMG_RCOORD *coor, const IMG_INT &nums);
+	double Pt2PtDis(const IMG_LRCOORD &pt1, const IMG_LRCOORD &pt2);
+	void clear();
+	IMG_INT PointPairFilter(VIS_POINT_PAIR *pointPair, IMG_INT &ptPairNums);
+	VIS_POINT_PAIR GetBaseCurveNearest(VIS_POINT_PAIR *pointPair, IMG_INT ptPairNums);
+	bool ptOnLine(VIS_POINT_PAIR linePt1, VIS_POINT_PAIR linePt2, VIS_POINT_PAIR *pointPair, IMG_INT &ptPairNums, VIS_POINT_PAIR &dstPt);
+};
