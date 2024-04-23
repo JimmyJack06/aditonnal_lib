@@ -1,235 +1,4938 @@
-#pragma once
-#include<math.h>
-#include <ViType.h>
-#include <string.h>
-#include"VisEdge.h"
+#include"VisCurveFitting.h"
+#include<stdio.h>
+#include<string>
+#include<ipp.h>
+#include<mkl.h>
+#include<vector>
+#include <io.h>
+#include<direct.h>
 #include"VisClock.h"
-#include"Base.h"
-#include"VisEdgeFilter.h"
-#ifdef  VISSMOOTHFITTING_EXPORTS
-#define DLLEXPORT __declspec(dllexport)
-#else
-#define DLLEXPORT __declspec(dllimport) 
-#endif
-#define MAX_EQUATION_COEFF 10
-#define ISZERO(x)	(fabs(x) < 1e-5 ? true : false)
-
-namespace curvefitting
-{
-	enum ControlType
-	{
-		NOORDER = -1,
-		ZEROORDER = 0,
-		ONEORDER = 1,
-		TWOORDER = 2
-	};
-
-	struct VIS_EQUATION
-	{
-		double equCoeff[MAX_EQUATION_COEFF];  // a+bx+cx^2+dx^3...
-		IMG_INT equPara;    // 参数可用个数，3维4个系数
-		IMG_LRCOORD limits;    // 参数范围
-		VIS_EQUATION()
-		{
-			memset(equCoeff, 0, sizeof(double)*MAX_EQUATION_COEFF);
-			equPara = 0;
-			limits.x = 0.0;
-		}
-		void init(IMG_INT para)
-		{
-			memset(equCoeff, 0, sizeof(double)*MAX_EQUATION_COEFF);
-			equPara = para;
-		}
-	};
-
-	struct EDGEPARA
-	{
-		IMG_REAL m_normalVari; // 直线半宽（默认0）
-		IMG_INT m_iGradKernal;         // 梯度核，默认3即1*3
-		IMG_REAL m_dGaussSigmaWidth, m_dGaussSigmaHeight;
-		IMG_INT m_dGaussKerWidth, m_dGaussKerHeight;
-
-		EDGETYPE m_edgeDir;   // 边缘方向
-		EdgePriorSelect m_edgeSelect;  // 偏好筛选
-		GRADLEVEL_EDGE m_gradLevel;  // 梯度等级
-		GradMethod m_gradMethod;
-		IMG_INT m_iMinGrad;
-		IMG_REAL m_fOffset;
-		EDGEPARA()
-		{
-			m_fOffset = 0.f;
-			m_normalVari = 0.f;
-			m_iGradKernal = 3;
-			m_dGaussSigmaWidth = m_dGaussSigmaHeight = 0.f;
-			m_dGaussKerWidth = m_dGaussKerHeight = 0;
-			m_edgeDir = EDGETYPE::ANY;
-			m_edgeSelect = EdgePriorSelect::NEARCENTER;
-			m_gradLevel = GRADLEVEL_EDGE::NORMAL;
-			m_gradMethod = GradMethod::EDGE_QUADRATIC;
-			m_iMinGrad = 10;
-		}
-	};
-
-	enum VIS_CURVE_TYPE
-	{
-		B_SPLINE,
-		NURBS
-	};
-
-	struct VIS_POINT_PAIR
-	{
-		IMG_LRCOORD edgePt;
-		IMG_LRCOORD curvePt;
-		IMG_LREAL ptDis;
-		IMG_LREAL coeffVal;
-		IMG_INT searchNums;
-	};
-
-	struct PARA_POINT
-	{
-		IMG_LREAL para;
-		IMG_LRCOORD pt;
-	};
-
-	struct VIS_PARA_EQUATION
-	{
-		VIS_EQUATION xEqu;
-		VIS_EQUATION yEqu;
-		IMG_LRCOORD limits;    // 参数范围
-		IMG_LRCOORD startPt, endPt;
-		VIS_PARA_EQUATION()
-		{
-			limits.x = 0.0; limits.y = 0.0;
-			startPt = { 0.0,0.0 }; endPt = { 0.0, 0.0 };
-		}
-	};
-}
+#include "VisImage.h"
+using namespace std;
 using namespace curvefitting;
 
-class DLLEXPORT CVisCurveFitting
+const IMG_LREAL pi = 3.1415926535;
+const IMG_LREAL d2r = (pi / 180);
+const IMG_LREAL r2d = (180 / pi);
+
+int curveAdjustEdgeLine(IMG_LRCOORD& lineStart, IMG_LRCOORD& lineEnd, const IMG_UBBUF& buff)
 {
-public:
-	CVisCurveFitting();
-	CVisCurveFitting(const CVisCurveFitting&curve);
-	CVisCurveFitting& operator=(const CVisCurveFitting&curve);
-	virtual~CVisCurveFitting();
-	IMG_VVOID SetClosed(bool isClosed);
-	bool GetClosed();
-	IMG_INT SetInputPara(IMG_RCOORD *coor, IMG_INT nums, IMG_INT dims, VIS_CURVE_TYPE curveType = VIS_CURVE_TYPE::B_SPLINE, IMG_REAL *weight = nullptr, IMG_INT weightNums = 0);
-	IMG_INT SetDebugMode(bool debug, char* path);
-	IMG_VVOID SetImage(IMG_UBBUF img);
-	IMG_VVOID SetMask(IMG_UBBUF* mask);
-	IMG_VVOID SetControlType(curvefitting::ControlType type);
-	IMG_VVOID SetEdgePara(EDGEPARA edgePara);
-	IMG_VVOID SetEdgeSearLength(IMG_REAL len);
-	IMG_VVOID GetCurvePts(IMG_INT regionSample, PARA_POINT *&coor, IMG_INT &nums, PARA_POINT *&upCoor, PARA_POINT *&downCoor, IMG_RCOORD &midVec);
-	//IMG_VVOID SetCurveType(VIS_CURVE_TYPE curveType, IMG_REAL *weight = nullptr, IMG_INT nums = 0); // 类型为NURBS时后面两个参数有效
-	IMG_VVOID SetEdgeControlPts(IMG_RCOORD *coor, IMG_INT nums);
-	IMG_VVOID SetSampleInRegion(IMG_INT sample);
-	IMG_INT SetCurveNode(IMG_INT nums);
-	IMG_VVOID SetFittingPara(IMG_REAL sigma, IMG_REAL sigmaCont, IMG_UINT times, IMG_REAL precision);
+	int width = buff.size.width;
+	int height = buff.size.height;
+	if (width < 1 || height < 1)
+		return -1;
 
-	IMG_INT CurveFitting();
-	IMG_INT ClosedCurveFitting();
+	double& ex = lineEnd.x;
+	double& ey = lineEnd.y;
+	double& sx = lineStart.x;
+	double& sy = lineStart.y;
 
-	IMG_VVOID GetCoeffEquNums(IMG_INT &nums);
-	IMG_VVOID GetCoeffEqu(VIS_PARA_EQUATION *&numeratorEqu, VIS_PARA_EQUATION *&denominatorEqu, IMG_INT nums);
-	IMG_VVOID GetCurveNodeNums(IMG_INT &nums);
-	IMG_VVOID GetCurveNode(IMG_REAL *&node);
-	IMG_VVOID GetCurveWeightNums(IMG_INT &nums);
-	IMG_VVOID GetCurveWeight(IMG_REAL *&weight);
+	if (sx >= 0 && sx < width&&ex>0 && ex < width&&
+		sy >= 0 && sy < height&&ey>0 && ey < height)
+		return 0;
 
-	IMG_VVOID GetCurveEdge(IMG_INT regionSample, PARA_POINT *&coor, IMG_INT &nums);
-	IMG_VVOID GetCurveEdge(IMG_INT regionSample, IMG_LREAL norLength, PARA_POINT *&coor, IMG_INT &nums, PARA_POINT *&upCoor, PARA_POINT *&downCoor, IMG_LRCOORD &meanUp, IMG_LRCOORD &meanDown);
-	IMG_VVOID GetClosedCurveEdge(IMG_INT regionSample, IMG_LREAL norLength, PARA_POINT *&coor, IMG_INT &nums,
-		PARA_POINT *&upCoor, PARA_POINT *&downCoor, IMG_LRCOORD &meanPt);
-	IMG_VVOID GetCurveCorssLine(IMG_INT Sample, IMG_RCOORD startPt, IMG_RCOORD endPt, PARA_POINT *&coor, IMG_INT &nums);
-	//IMG_VVOID GetCurveCorssArc(IMG_RCOORD startPt, IMG_RCOORD endPt, PARA_POINT *&coor, IMG_INT &nums);
-	IMG_VVOID GetCurveCorssCircle(IMG_INT Sample, IMG_CIRCLE circle, PARA_POINT *&coor, IMG_INT &nums);
-	IMG_VVOID GetCurveLength(PARA_POINT pt1, PARA_POINT pt2, IMG_INT regionSample, IMG_REAL &length);
+	IMG_LRCOORD center = lineEnd;
+	IMG_LRCOORD end = lineStart;
+	double lineAngle = atan2(end.y - center.y, end.x - center.x);;
+	if (lineAngle < 0)
+		lineAngle += 2 * pi;
 
-	IMG_VVOID GetClosedCurveEdge(IMG_INT regionSample, curvefitting::PARA_POINT *&coor, IMG_INT &nums, IMG_REAL &length);
-	IMG_VVOID GetClosedCurveCorssLine(IMG_INT Sample, IMG_RCOORD startPt, IMG_RCOORD endPt, curvefitting::PARA_POINT *&coor, IMG_INT &nums);
-	IMG_VVOID GetClosedCurveCorssCircle(IMG_INT Sample, IMG_CIRCLE circle, curvefitting::PARA_POINT *&coor, IMG_INT &nums);
-	IMG_VVOID GetClosedCurveLength(curvefitting::PARA_POINT pt1, curvefitting::PARA_POINT pt2, IMG_INT regionSample, IMG_REAL &length);
-	IMG_REAL GetClosedCurveLength(IMG_REAL ItePrecision);
-	IMG_REAL m_rCurveLength;
-	IMG_REAL m_rEdgeLength;
-private:
-	bool m_bIsClosed;
-	IMG_UBBUF m_ubbufSrc;
-	IMG_UBBUF* m_ubbufMask;
-	bool m_bDebug;
-	char debugPath[256];
-	//CVisClock m_clock;
-	curvefitting::ControlType m_ContType;     // 约束条件，默认0阶约束 
-	IMG_RCOORD *m_coorInput;   // 输入的控制点（基函数个数）
-	IMG_INT m_iPtNums;  
-	IMG_REAL m_xRange;
-	IMG_REAL m_yRange;
-	IMG_REAL m_xMin;
-	IMG_REAL m_yMin;
-	IMG_REAL *m_rNode;       // 根据控制点生成的节点数 
-	IMG_INT m_iNodeNums;
-	IMG_INT m_iDims;         // 曲线维数，默认3
+	if (end.x > 0 && end.x < buff.size.width - 1)
+	{
+		if (end.y <0) {
+			end.y = 0;
+		}
+		else if(end.y> buff.size.height - 1){
+			end.y = buff.size.height - 1;
+		}
 
-	//IMG_INT  m_regionNum;    // 曲线节点区间数目（=m_iNodeNums - 2*(dims+1）+1）0000 1111
-	//VIS_EQUATION **m_NodeFun;      // 节点函数，个数为（（dims+1）*每一维的基函数个数*区间数）
-	//IMG_INT m_iFunBase;
-	VIS_PARA_EQUATION *m_paraEqu;  // 曲线方程结果，分段函数
-	VIS_PARA_EQUATION *m_deriEqu;
-	IMG_INT m_iParaEquNums;       // 曲线方程个数
-	VIS_CURVE_TYPE m_curveType;  // 需要生成的曲线类型，B-Spline或者NURBS（B-Spline是NURBS的特色形式，当权因子都为1时退化为B-Spline）
-	//IMG_REAL *m_pCoorWeight;     // 曲线为NURBS时的权因子，个数和控制点相等
-	//IMG_INT m_WeightNums;
-	//VIS_PARA_EQUATION *m_paraEqu_deno;  // NURBS曲线的分母
-	VIS_EQUATION *m_NodeFun;
-	IMG_SIZE m_szNodeFun;
-	IMG_RCOORD *m_pcoorEdgeCont;
-	IMG_INT m_iEdgeCont;
+		end.x = center.x + (end.y - center.y) * tan(pi/2.0 - lineAngle);
+	}
+	else if (end.x < 0)
+	{
+		end.x = 0;
+		end.y = center.y + (end.x - center.x)*tan(lineAngle);
+	}
+	else {
+		end.x = buff.size.width - 1;
+		end.y = center.y + (end.x - center.x)*tan(lineAngle);
+	}
+	lineStart = end;
 
-	EDGEPARA m_edgePara;   // 边缘参数
-	IMG_REAL m_rSearLen;   // 搜索的边缘长度
-	IMG_INT m_regSample;   // 搜索边缘点的采样个数，每个区间内采样个数
+	center = lineStart;
+	end = lineEnd;
 
-	VIS_POINT_PAIR *m_ptPair; // 搜索到的点对以及拟合的参数
-	IMG_INT m_ptPairNums;
-	IMG_REAL *rFittingNode;
-	IMG_INT m_iFittingNodeNums;
-	IMG_REAL *pWeight;
-	IMG_INT m_iWeightNums;
-	//VIS_EQUATION *FittingBaseEqu;
-	//IMG_INT m_FitEquWidth;
-	//IMG_INT m_FitEquHeight;
-	VIS_EQUATION *m_pDisEqu;
-	IMG_INT m_iDisEquNums;
+	lineAngle = atan2(end.y - center.y, end.x - center.x);
+	if (lineAngle < 0)
+		lineAngle += 2 * pi;
+	if (end.x > 0 && end.x < buff.size.width - 1)
+	{
+		if (end.y<0) {
+			end.y = 0;
+		}
+		else if(end.y >buff.size.height - 1) {
+			end.y = buff.size.height - 1;
+		}
 
-	IMG_REAL m_sigma;
-	IMG_REAL m_contSigma;
-	IMG_REAL m_addSigma;
-	IMG_UINT m_iterNums;
-	IMG_REAL m_precision;
-	curvefitting::VIS_EQUATION *m_ClosedBaseFun;
-	IMG_INT m_ClosedBaseFunNums;
-private:
+		end.x = center.x + (end.y - center.y) * tan(pi / 2.0 - lineAngle);
+	}
+	else if (end.x < 0)
+	{
+		end.x = 0;
+		end.y = center.y + (end.x - center.x)*tan(lineAngle);
+	}
+	else {
+		end.x = buff.size.width - 1;
+		end.y = center.y + (end.x - center.x)*tan(lineAngle);
+	}
+	lineEnd = end;
 
-	IMG_INT NodeVector(IMG_REAL*NodeVector, IMG_INT nodeNums, IMG_INT dims, bool bRepNode);
+	if (lineStart.x<0 || lineStart.x>buff.size.width - 1 || lineEnd.x<0 || lineEnd.x>buff.size.width - 1 ||
+		lineStart.y<0 || lineStart.y>buff.size.height - 1 || lineEnd.y<0 || lineEnd.y>buff.size.height - 1)
+	{
+		return -2;
+	}
+	return 0;
+}
+
+
+CVisCurveFitting::CVisCurveFitting():m_ubbufMask(nullptr)
+{
+	m_coorInput = nullptr;
+	m_iPtNums = 0;
+	m_rNode = nullptr;
+	m_iNodeNums = 0;
+	m_iDims = 3;
+	//m_regionNum = 0;
+	//m_NodeFun = nullptr;
+	//m_iFunBase = 0;
+	m_paraEqu = nullptr;
+	m_deriEqu = nullptr;
+	m_iParaEquNums = 0;
+	m_rSearLen = 15.f;
+	//m_pCoorWeight = nullptr;
+	//m_WeightNums = 0;
+	m_curveType = VIS_CURVE_TYPE::NURBS;
+	//m_paraEqu_deno = nullptr;
+	m_regSample = 100;
+	m_ptPair = nullptr;
+	m_ptPairNums = 0;
+	rFittingNode = nullptr;
+	m_iFittingNodeNums = 15;
+	pWeight = nullptr;
+	m_iWeightNums = 0;
+	m_sigma = 0.5;
+	m_contSigma = 0.5;
+	m_addSigma = 4;
+	m_iterNums = 20;
+	m_precision = 1.2;
+	m_pDisEqu = nullptr;
+	m_iDisEquNums = 0;
+	//m_FitEquHeight = 0;
+	//debugPath = "";
+	m_bDebug = false;
+	m_ContType = ControlType::ZEROORDER;
+	m_NodeFun = nullptr;
+	m_xRange = m_yRange = m_xMin = m_yMin = 0.f;
+	m_pcoorEdgeCont = nullptr;
+	m_iEdgeCont = 0;
+	m_bIsClosed = false;
+	m_ClosedBaseFun = nullptr;
+	m_ClosedBaseFunNums = 0;
+	m_rCurveLength = 0.f;
+}
+IMG_VVOID CVisCurveFitting::SetClosed(bool isClosed)
+{
+	m_bIsClosed = isClosed;
+}
+bool CVisCurveFitting::GetClosed() {
+	return m_bIsClosed;
+}
+
+CVisCurveFitting::CVisCurveFitting(const CVisCurveFitting&curve)
+{
+	m_bDebug = curve.m_bDebug;
+	/*if (m_bDebug){
+		char name[256];
+		sprintf(name, "%s\\subLog", curve.debugPath);
+		this->SetDebugMode(true, name);
+	}*/
+	sprintf(debugPath, "%s", curve.debugPath);
+	m_precision = curve.m_precision;
+	m_iterNums = curve.m_iterNums;
+	m_contSigma = curve.m_contSigma;
+	m_sigma = curve.m_sigma;
+	m_addSigma = curve.m_addSigma;
+	m_iDisEquNums = curve.m_iDisEquNums;
+	m_pDisEqu = new VIS_EQUATION[m_iDisEquNums];
+	for (int i = 0; i < m_iDisEquNums; i++)
+	{
+		m_pDisEqu[i] = curve.m_pDisEqu[i];
+	}
+	m_iWeightNums = curve.m_iWeightNums;
+	pWeight = new IMG_REAL[m_iWeightNums];
+	for (int i = 0; i < m_iWeightNums; i++)
+	{
+		pWeight[i] = curve.pWeight[i];
+	}
+	m_ClosedBaseFunNums = curve.m_ClosedBaseFunNums;
+	m_ClosedBaseFun = new VIS_EQUATION[m_ClosedBaseFunNums];
+	for (int i = 0; i < m_ClosedBaseFunNums; i++)
+	{
+		m_ClosedBaseFun[i] = curve.m_ClosedBaseFun[i];
+	}
+	m_iFittingNodeNums = curve.m_iFittingNodeNums;
+	rFittingNode = new IMG_REAL[m_iFittingNodeNums];
+	for (int i = 0; i < m_iFittingNodeNums; i++)
+	{
+		rFittingNode[i] = curve.rFittingNode[i];
+	}
+	m_ptPairNums = curve.m_ptPairNums;
+	m_ptPair = new VIS_POINT_PAIR[m_ptPairNums];
+	for (int i = 0; i < m_ptPairNums; i++)
+	{
+		m_ptPair[i] = curve.m_ptPair[i];
+	}
+	m_regSample = curve.m_regSample;
+	m_rSearLen = curve.m_rSearLen;
+	m_edgePara = curve.m_edgePara;
+
+	/*m_WeightNums = curve.m_WeightNums;
+	m_pCoorWeight = new IMG_REAL[m_WeightNums];
+	for (int i = 0; i < m_WeightNums; i++)
+	{
+		m_pCoorWeight[i] = curve.m_pCoorWeight[i];
+	}*/
+	m_curveType = curve.m_curveType;
+	m_iParaEquNums = curve.m_iParaEquNums;
+	m_paraEqu = new VIS_PARA_EQUATION[m_iParaEquNums];
+	m_deriEqu = new VIS_PARA_EQUATION[m_iParaEquNums];
+	//m_paraEqu_deno = new VIS_PARA_EQUATION[m_iParaEquNums];
+	for (int i = 0; i < m_iParaEquNums; i++)
+	{
+		m_paraEqu[i] = curve.m_paraEqu[i];
+		m_deriEqu[i] = curve.m_deriEqu[i];
+		//m_paraEqu_deno[i] = curve.m_paraEqu_deno[i];
+	}
+	m_iDims = curve.m_iDims;
+	m_iNodeNums = curve.m_iNodeNums;
+	m_rNode = new IMG_REAL[m_iNodeNums];
+	for (int i = 0; i < m_iNodeNums; i++)
+	{
+		m_rNode[i] = curve.m_rNode[i];
+	}
+	m_iPtNums = curve.m_iPtNums;
+	m_coorInput = new IMG_RCOORD[m_iPtNums];
+	for (int i = 0; i < m_iPtNums; i++)
+	{
+		m_coorInput[i] = curve.m_coorInput[i];
+	}
+	m_ContType = curve.m_ContType;
+
+	m_szNodeFun = curve.m_szNodeFun;
+	m_NodeFun = new VIS_EQUATION[m_szNodeFun.height*m_szNodeFun.width];
+	for (int i = 0; i < m_szNodeFun.height*m_szNodeFun.width; i++)
+	{
+		m_NodeFun[i] = curve.m_NodeFun[i];
+	}
+	m_xRange = curve.m_xRange;
+	m_yRange = curve.m_yRange;
+	m_xMin = curve.m_xMin;
+	m_yMin = curve.m_yMin;
+
+	m_iEdgeCont = curve.m_iEdgeCont;
+	m_pcoorEdgeCont = new IMG_RCOORD[m_iEdgeCont];
+	for (int i = 0; i < m_iEdgeCont; i++)
+	{
+		m_pcoorEdgeCont[i] = curve.m_pcoorEdgeCont[i];
+	}
+	m_bIsClosed = curve.m_bIsClosed;
+	m_rCurveLength = curve.m_rCurveLength;
+	m_rEdgeLength = curve.m_rEdgeLength;
+}
+
+CVisCurveFitting & CVisCurveFitting::operator=(const CVisCurveFitting & curve)
+{
+	if (&curve == this)
+	{
+		return *this;
+	}
+	clear();
+	m_bDebug = curve.m_bDebug;
+	/*if (m_bDebug){
+	char name[256];
+	sprintf(name, "%s\\subLog", curve.debugPath);
+	this->SetDebugMode(true, name);
+	}*/
+	sprintf(debugPath, "%s", curve.debugPath);
+	m_precision = curve.m_precision;
+	m_iterNums = curve.m_iterNums;
+	m_contSigma = curve.m_contSigma;
+	m_sigma = curve.m_sigma;
+	m_addSigma = curve.m_addSigma;
+	m_iDisEquNums = curve.m_iDisEquNums;
+	m_pDisEqu = new VIS_EQUATION[m_iDisEquNums];
+	for (int i = 0; i < m_iDisEquNums; i++)
+	{
+		m_pDisEqu[i] = curve.m_pDisEqu[i];
+	}
+	m_ClosedBaseFunNums = curve.m_ClosedBaseFunNums;
+	m_ClosedBaseFun = new VIS_EQUATION[m_ClosedBaseFunNums];
+	for (int i = 0; i < m_ClosedBaseFunNums; i++)
+	{
+		m_ClosedBaseFun[i] = curve.m_ClosedBaseFun[i];
+	}
+	m_iWeightNums = curve.m_iWeightNums;
+	pWeight = new IMG_REAL[m_iWeightNums];
+	for (int i = 0; i < m_iWeightNums; i++)
+	{
+		pWeight[i] = curve.pWeight[i];
+	}
+	m_iFittingNodeNums = curve.m_iFittingNodeNums;
+	rFittingNode = new IMG_REAL[m_iFittingNodeNums];
+	for (int i = 0; i < m_iFittingNodeNums; i++)
+	{
+		rFittingNode[i] = curve.rFittingNode[i];
+	}
+	m_ptPairNums = curve.m_ptPairNums;
+	m_ptPair = new VIS_POINT_PAIR[m_ptPairNums];
+	for (int i = 0; i < m_ptPairNums; i++)
+	{
+		m_ptPair[i] = curve.m_ptPair[i];
+	}
+	m_regSample = curve.m_regSample;
+	m_rSearLen = curve.m_rSearLen;
+	m_edgePara = curve.m_edgePara;
+
+	/*m_WeightNums = curve.m_WeightNums;
+	m_pCoorWeight = new IMG_REAL[m_WeightNums];
+	for (int i = 0; i < m_WeightNums; i++)
+	{
+		m_pCoorWeight[i] = curve.m_pCoorWeight[i];
+	}*/
+	m_curveType = curve.m_curveType;
+	m_iParaEquNums = curve.m_iParaEquNums;
+	m_paraEqu = new VIS_PARA_EQUATION[m_iParaEquNums];
+	m_deriEqu = new VIS_PARA_EQUATION[m_iParaEquNums];
+	//m_paraEqu_deno = new VIS_PARA_EQUATION[m_iParaEquNums];
+	for (int i = 0; i < m_iParaEquNums; i++)
+	{
+		m_paraEqu[i] = curve.m_paraEqu[i];
+		m_deriEqu[i] = curve.m_deriEqu[i];
+		//m_paraEqu_deno[i] = curve.m_paraEqu_deno[i];
+	}
+	m_iDims = curve.m_iDims;
+	m_iNodeNums = curve.m_iNodeNums;
+	m_rNode = new IMG_REAL[m_iNodeNums];
+	for (int i = 0; i < m_iNodeNums; i++)
+	{
+		m_rNode[i] = curve.m_rNode[i];
+	}
+	m_iPtNums = curve.m_iPtNums;
+	m_coorInput = new IMG_RCOORD[m_iPtNums];
+	for (int i = 0; i < m_iPtNums; i++)
+	{
+		m_coorInput[i] = curve.m_coorInput[i];
+	}
+	m_ContType = curve.m_ContType;
+
+	m_szNodeFun = curve.m_szNodeFun;
+	m_NodeFun = new VIS_EQUATION[m_szNodeFun.height*m_szNodeFun.width];
+	for (int i = 0; i < m_szNodeFun.height*m_szNodeFun.width; i++)
+	{
+		m_NodeFun[i] = curve.m_NodeFun[i];
+	}
+	m_xRange = curve.m_xRange;
+	m_yRange = curve.m_yRange;
+	m_xMin = curve.m_xMin;
+	m_yMin = curve.m_yMin;
+
+	m_iEdgeCont = curve.m_iEdgeCont;
+	m_pcoorEdgeCont = new IMG_RCOORD[m_iEdgeCont];
+	for (int i = 0; i < m_iEdgeCont; i++)
+	{
+		m_pcoorEdgeCont[i] = curve.m_pcoorEdgeCont[i];
+	}
+	m_bIsClosed = curve.m_bIsClosed;
+	m_rCurveLength = curve.m_rCurveLength;
+	m_rEdgeLength = curve.m_rEdgeLength;
+	return *this;
+}
+
+CVisCurveFitting::~CVisCurveFitting()
+{
+	clear();
+}
+
+IMG_VVOID CVisCurveFitting::SetImage(IMG_UBBUF img)
+{
+	m_ubbufSrc.linestep = img.linestep;
+	m_ubbufSrc.size = img.size;
+	m_ubbufSrc.ptr = img.ptr;
+	if (m_bDebug)
+	{
+		CVisImage visImg;
+		visImg.SetImage(m_ubbufSrc);
+		char name[256];
+		sprintf(name, "%s\\img.bmp", debugPath);
+		visImg.WriteImage(name);
+	}
+}
+
+IMG_VVOID CVisCurveFitting::SetMask(IMG_UBBUF * mask)
+{
+	if (mask)
+		m_ubbufMask = mask;
+}
+
+IMG_VVOID CVisCurveFitting::SetControlType(ControlType type)
+{
+	m_ContType = type;
+}
+
+IMG_INT CVisCurveFitting::SetInputPara(IMG_RCOORD *coor, IMG_INT nums, IMG_INT dims, VIS_CURVE_TYPE curveType, IMG_REAL *weight, IMG_INT weightNums)
+{
+	if (m_coorInput)
+	{
+		delete[]m_coorInput;
+		m_coorInput = nullptr;
+	}
+	if (m_rNode)
+	{
+		delete[]m_rNode;
+		m_rNode = nullptr;
+	}
+	/*for (int i = 0; i < m_iFunBase; i++)
+	{
+		if (m_NodeFun[i])
+		{
+			delete[] m_NodeFun[i];
+			m_NodeFun[i] = nullptr;
+		}
+	}
+	if (m_NodeFun)
+	{
+		delete[]m_NodeFun;
+		m_NodeFun = nullptr;
+	}*/
+	if (m_paraEqu)
+	{
+		delete[]m_paraEqu;
+		m_paraEqu = nullptr;
+	}
+	if (m_deriEqu)
+	{
+		delete[]m_deriEqu;
+		m_deriEqu = nullptr;
+	}
+	/*if (m_pCoorWeight)
+	{
+		delete[]m_pCoorWeight;
+		m_pCoorWeight = nullptr;
+	}*/
+	if (m_NodeFun)
+	{
+		delete[]m_NodeFun;
+		m_NodeFun = nullptr;
+	}
+	//if (m_paraEqu_deno)
+	//{
+	//	delete[]m_paraEqu_deno;
+	//	m_paraEqu_deno = nullptr;
+	//}
+
+	/*if (m_bDebug)
+	{
+		m_clock.Click("Start init");
+	}*/
+
+	int i, j, k, m; i = j = k = m = 0;
+	int status = 0;
+	if (nums < (dims + 1))
+	{
+		printf("input error:coorNums must >= dims");
+		status = -2;
+		return status;
+	}
+	if (m_bDebug)
+	{
+		FILE *funfile;
+		char name[256];
+		sprintf(name, "%s\\controlCoor.txt", debugPath);
+		funfile = fopen(name, "w");
+		for (j = 0; j < nums; j++)
+		{
+			fprintf(funfile, "%12.9e %12.9e\n", coor[j].x, coor[j].y);
+		}
+		fclose(funfile);
+	}
+	if (m_bIsClosed)
+	{
+		m_iPtNums = nums + dims;
+	}
+	else
+	{
+		m_iPtNums = nums;
+	}
+
+	//m_iPtNums = nums;
+	m_coorInput = new IMG_RCOORD[m_iPtNums];
+	memcpy(m_coorInput, coor, sizeof(IMG_RCOORD)*m_iPtNums);
+	if (m_bIsClosed)
+	{
+		for (i = 0; i < dims; i++)
+		{
+			m_coorInput[m_iPtNums - dims + i] = m_coorInput[i];
+		}
+	}
+	float xMin, yMin, xMax, yMax; xMin = yMin = 1e7; xMax = yMax = 0.f;
+	for (i = 0; i < m_iPtNums; i++)
+	{
+		if (m_coorInput[i].x > xMax)
+		{
+			xMax = m_coorInput[i].x;
+		}
+		if (m_coorInput[i].x < xMin)
+		{
+			xMin = m_coorInput[i].x;
+		}
+		if (m_coorInput[i].y > yMax)
+		{
+			yMax = m_coorInput[i].y;
+		}
+		if (m_coorInput[i].y < yMin)
+		{
+			yMin = m_coorInput[i].y;
+		}
+	}
+	m_xRange = (xMax - xMin);
+	m_yRange = (yMax - yMin);
+	m_xMin = xMin;
+	m_yMin = yMin;
+	/*for (i = 0; i < m_iPtNums; i++)
+	{
+		m_coorInput[i].x = (m_coorInput[i].x - xMin) / (xMax - xMin);
+		m_coorInput[i].y = (m_coorInput[i].y - yMin) / (yMax - yMin);
+	}*/
+
 	
-	IMG_INT SearchPointPair(IMG_UBBUF &srcImg, VIS_PARA_EQUATION *&upEqu,/* VIS_PARA_EQUATION *&downEqu,*/ IMG_INT equNums);
-	IMG_INT SearchPointPair_closed(IMG_UBBUF &srcImg, VIS_PARA_EQUATION *&upEqu/*, VIS_PARA_EQUATION *&downEqu*/, IMG_INT equNums);
+	m_iDims = dims;
+	m_iNodeNums = m_iPtNums + m_iDims + 1;
+	//m_regionNum = m_iNodeNums - 2 * (m_iDims + 1) + 1;
+	//m_regionNum = m_iNodeNums - 1;
+	IMG_INT regionNum = m_iNodeNums - 1;
+	m_rNode = new IMG_REAL[m_iNodeNums];
+	//status = NodeVector(m_rNode, m_iNodeNums, m_iDims, true);
+	if (m_bIsClosed)
+	{
+		status = NodeVector(m_rNode, m_iNodeNums, m_iDims, false);
+	}
+	else
+	{
+		status = NodeVector(m_rNode, m_iNodeNums, m_iDims, true);
+	}
+	if (status != 0)
+	{
+		status = -3;
+		return status;
+	}
+	int iVal = m_iNodeNums - 2 * dims - 1;
+	//for (i = 0; i < m_iNodeNums; i++)
+	//{
+	//	m_rNode[i] *= iVal;
+	//}
 
-	IMG_REAL ComputeVecDis(IMG_RCOORD srcStart, IMG_RCOORD srcEndt, IMG_RCOORD dstStart, IMG_RCOORD dstEnd);  // 左手定则，计算矢量距离
-	IMG_REAL BaseFunction(IMG_INT index, IMG_INT dims, IMG_REAL*NodeVector, IMG_INT nodeNums, IMG_REAL input);
-	IMG_INT WeightFunction(VIS_POINT_PAIR *&pointPair, const IMG_INT ptPairNums, IMG_REAL **pBaseFunVal, IMG_INT baseFunNums,
-		IMG_INT dataNums, IMG_REAL &Sigma, IMG_REAL &SigmaCont, IMG_REAL &addSigma, const IMG_UINT &IteMaxTimes, const IMG_REAL &ItePrecision);
-	IMG_INT WeightFunction(curvefitting::VIS_POINT_PAIR *&pointPair, const IMG_INT ptPairNums,
-		IMG_REAL &Sigma, IMG_REAL &SigmaCont, IMG_REAL &addSigma, const IMG_UINT &IteMaxTimes, const IMG_REAL &ItePrecision);
-	bool LineCrossLine(IMG_RCOORD line1Start, IMG_RCOORD line1End, IMG_RCOORD line2Start, IMG_RCOORD line2End, IMG_RCOORD &dst);
-	bool PointInLine(IMG_RCOORD lineStart, IMG_RCOORD lineEnd, IMG_RCOORD pt);
-	IMG_INT AddEdgeControlPts(const IMG_RCOORD *coor, const IMG_INT &nums);
-	double Pt2PtDis(const IMG_LRCOORD &pt1, const IMG_LRCOORD &pt2);
-	void clear();
-	IMG_INT PointPairFilter(VIS_POINT_PAIR *pointPair, IMG_INT &ptPairNums);
-	VIS_POINT_PAIR GetBaseCurveNearest(VIS_POINT_PAIR *pointPair, IMG_INT ptPairNums);
-	bool ptOnLine(VIS_POINT_PAIR linePt1, VIS_POINT_PAIR linePt2, VIS_POINT_PAIR *pointPair, IMG_INT &ptPairNums, VIS_POINT_PAIR &dstPt);
+	// 如果传入的权因子数不等于控制点数，那么就会强制让其相等，并将权因子赋值为1退化成B-Spline曲线；
+	//m_WeightNums = m_iPtNums;
+	//m_pCoorWeight = new IMG_REAL[m_WeightNums];
+	//if (curveType == VIS_CURVE_TYPE::B_SPLINE)
+	//{
+	//	/*if (curveType == VIS_CURVE_TYPE::B_SPLINE)
+	//	{*/
+	//	for (i = 0; i < m_WeightNums; i++)
+	//	{
+	//		m_pCoorWeight[i] = 1.f;
+	//	}
+	//		//memset(m_pCoorWeight, 1.f, sizeof(IMG_REAL)*m_WeightNums);
+	//	//}
+	///*	else
+	//	{
+	//		memset(m_pCoorWeight, 2.5f, sizeof(IMG_REAL)*m_WeightNums);
+	//	}*/
+	//}
+	//else
+	//{
+	//	if (weightNums != m_iPtNums)
+	//	{
+	//		for (i = 0; i < m_WeightNums; i++)
+	//		{
+	//			m_pCoorWeight[i] = 2.5f;
+	//		}
+	//	}
+	//	else
+	//	{
+	//		memcpy(m_pCoorWeight, weight, sizeof(IMG_REAL)*m_WeightNums);
+	//	}
+	//}
+
+	m_iParaEquNums = m_iNodeNums - 2 * (m_iDims + 1) + 1;
+	m_paraEqu = new VIS_PARA_EQUATION[m_iParaEquNums];
+
+	//m_NodeFun = new VIS_EQUATION *[m_iDims + 1];
+	//m_iFunBase = m_iDims + 1;
+	VIS_EQUATION **NodeFun = new VIS_EQUATION *[m_iDims + 1];
+	IMG_INT FunBase = m_iDims + 1;
+	for (i = 0; i < m_iDims + 1; i++)
+	{
+		//m_NodeFun[i] = new VIS_EQUATION[(m_iNodeNums - 1 - i) * m_regionNum];
+		/*for (j = 0; j < (m_iNodeNums - 1 - i) * m_regionNum; j++)
+		{
+			m_NodeFun[i][j].equPara = i + 1;
+		}*/
+		NodeFun[i] = new VIS_EQUATION[(m_iNodeNums - 1 - i) * regionNum];
+		for (j = 0; j < (m_iNodeNums - 1 - i) * regionNum; j++)
+		{
+			NodeFun[i][j].equPara = i + 1;
+		}
+	}
+	m_szNodeFun.width = regionNum;
+	m_szNodeFun.height = m_iNodeNums - 1 - m_iDims;
+	m_NodeFun = new VIS_EQUATION[m_szNodeFun.width*m_szNodeFun.height];
+	for (j = 0; j < m_iNodeNums - 1; j++)
+	{
+		for (k = j; k < j+1; k++)
+		{
+			if (m_rNode[k + 1] > m_rNode[k])
+			{
+				NodeFun[0][j*regionNum + k].equCoeff[0] = 1.0;
+			}
+		}
+	}
+	int mask = 1;
+	double deno1, deno2, deno3; deno1 = deno2 = deno3 = 0.f;
+	VIS_EQUATION tempEqu1, tempEqu2, finalEqu, tempVal;
+	for (i = 1; i < m_iDims + 1; i++)
+	{
+		for (j = 0; j < m_iNodeNums - 1 - mask; j++)
+		{
+			for (k = 0; k < regionNum; k++)
+			{
+				deno1 = m_rNode[j + i] - m_rNode[j]; deno2 = m_rNode[j + i + 1] - m_rNode[j + 1];
+				if (ISZERO(deno1) && !ISZERO(deno2))
+				{
+					ippsMulC_64f(NodeFun[i - 1][(j + 1)*regionNum + k].equCoeff, (double)m_rNode[j + i + 1], tempEqu1.equCoeff, i);
+					memcpy(tempEqu2.equCoeff + 1, NodeFun[i - 1][(j + 1)*regionNum + k].equCoeff, sizeof(double)*i);
+					tempEqu2.equCoeff[0] = 0.0;
+					ippsSub_64f(tempEqu2.equCoeff, tempEqu1.equCoeff, finalEqu.equCoeff, (i+1));
+					/*deno2 = 1.f / deno2;
+					ippsMulC_32f(finalEqu.equCoeff, deno2, finalEqu.equCoeff, (i+1));*/
+					ippsDivC_64f(finalEqu.equCoeff, deno2, finalEqu.equCoeff, (i + 1));
+					memcpy(NodeFun[i][j*regionNum + k].equCoeff, finalEqu.equCoeff, sizeof(double)*(i + 1));
+				}
+				else if (!ISZERO(deno1) && ISZERO(deno2))
+				{
+					ippsMulC_64f(NodeFun[i - 1][(j)*regionNum + k].equCoeff, (double)m_rNode[j], tempEqu1.equCoeff, i);
+					memcpy(tempEqu2.equCoeff + 1, NodeFun[i - 1][(j)*regionNum + k].equCoeff, sizeof(double)*(i));
+					tempEqu2.equCoeff[0] = 0.0;
+					ippsSub_64f(tempEqu1.equCoeff, tempEqu2.equCoeff, finalEqu.equCoeff, (i + 1));
+					/*deno1 = 1.f / deno1;
+					ippsMulC_32f(finalEqu.equCoeff, deno1, finalEqu.equCoeff, (i + 1));*/
+					ippsDivC_64f(finalEqu.equCoeff, deno1, finalEqu.equCoeff, (i + 1));
+					memcpy(NodeFun[i][j*regionNum + k].equCoeff, finalEqu.equCoeff, sizeof(double)*(i + 1));
+				}
+				else if (ISZERO(deno1) && ISZERO(deno2))
+				{
+					memset(NodeFun[i][j*regionNum + k].equCoeff, 0.0, sizeof(double)*MAX_EQUATION_COEFF);
+				}
+				else
+				{
+					ippsMulC_64f(NodeFun[i - 1][(j)*regionNum + k].equCoeff, (double)m_rNode[j], tempEqu1.equCoeff, i);
+					memcpy(tempEqu2.equCoeff + 1, NodeFun[i - 1][(j)*regionNum + k].equCoeff, sizeof(double)*(i));
+					tempEqu2.equCoeff[0] = 0.f;
+					ippsSub_64f(tempEqu1.equCoeff, tempEqu2.equCoeff, finalEqu.equCoeff, (i + 1));
+					/*deno1 = 1.f / deno1;
+					ippsMulC_32f(finalEqu.equCoeff, deno1, finalEqu.equCoeff, (i + 1));*/
+					ippsDivC_64f(finalEqu.equCoeff, deno1, finalEqu.equCoeff, (i + 1));
+					memcpy(tempVal.equCoeff, finalEqu.equCoeff, sizeof(double)*(i + 1));
+
+					ippsMulC_64f(NodeFun[i - 1][(j + 1)*regionNum + k].equCoeff, (double)m_rNode[j + i + 1], tempEqu1.equCoeff, i);
+					memcpy(tempEqu2.equCoeff + 1, NodeFun[i - 1][(j + 1)*regionNum + k].equCoeff, sizeof(double)*(i));
+					tempEqu2.equCoeff[0] = 0.0;
+					ippsSub_64f(tempEqu2.equCoeff, tempEqu1.equCoeff, finalEqu.equCoeff, (i + 1));
+					/*deno2 = 1.f / deno2;
+					ippsMulC_32f(finalEqu.equCoeff, deno2, finalEqu.equCoeff, (i + 1));*/
+					ippsDivC_64f(finalEqu.equCoeff, deno2, finalEqu.equCoeff, (i + 1));
+
+					ippsAdd_64f(tempVal.equCoeff, finalEqu.equCoeff, NodeFun[i][j*regionNum + k].equCoeff, (i + 1));
+					//memcpy(m_NodeFun[i][j*m_regionNum + k].equCoeff, finalEqu.equCoeff, sizeof(IMG_REAL)*MAX_EQUATION_COEFF);
+				}
+			}
+		}
+		mask++;
+	}
+
+	/*if (m_bDebug)
+	{
+		m_clock.Click("End init");
+	}*/
+
+	if (m_bDebug)
+	{
+		FILE *funfile;
+		char name[256];
+		sprintf(name, "%s\\basefun_curve.txt", debugPath);
+		funfile = fopen(name, "w");
+		for (j = 0; j < m_iNodeNums - 1 - m_iDims; j++)
+		{
+			for (k = j; k < j + 4; k++)
+			{
+				float a1 = m_rNode[k]; float a2 = m_rNode[k + 1], a3;
+				double val1, val2;
+				if (ISZERO(a1 - a2))
+				{
+					continue;
+				}
+				else
+				{
+					a3 = a2 - a1; a3 /= 100.f;
+					for (m = 0; m <= 100; m++)
+					{
+						val1 = a1 + m*a3;
+						val2 = NodeFun[m_iDims][j*regionNum + k].equCoeff[0] + NodeFun[m_iDims][j*regionNum + k].equCoeff[1] * val1 +
+							NodeFun[m_iDims][j*regionNum + k].equCoeff[2] * val1*val1 + NodeFun[m_iDims][j*regionNum + k].equCoeff[3] * val1*val1*val1;
+						fprintf(funfile, "%12.9e %12.9e\n", val1, val2);
+					}
+				}
+			}
+		}
+		fclose(funfile);
+	}
+	memcpy(m_NodeFun, NodeFun[m_iDims], sizeof(VIS_EQUATION)*m_szNodeFun.width*m_szNodeFun.height);
+
+	IMG_LRCOORD tempCoor1, tempCoor2;
+	/*if (m_curveType == VIS_CURVE_TYPE::B_SPLINE)
+	{
+		for (i = 0; i < m_iParaEquNums; i++)
+		{
+			m_paraEqu[i].limits.x = m_rNode[i + m_iDims]; m_paraEqu[i].limits.y = m_rNode[i + m_iDims + 1];
+			m_paraEqu[i].yEqu.equPara = m_iDims + 1;
+			m_paraEqu[i].xEqu.equPara = m_iDims + 1;
+
+			tempEqu1.init(m_iDims); tempEqu2.init(m_iDims);
+			finalEqu.init(m_iDims); tempVal.init(m_iDims);
+			for (j = i; j < i + m_iDims + 1; j++)
+			{
+				ippsMulC_32f(m_NodeFun[m_iDims][j*m_regionNum + i + m_iDims].equCoeff, m_coorInput[j].x, tempEqu1.equCoeff, MAX_EQUATION_COEFF);
+				ippsAdd_32f(tempEqu1.equCoeff, tempEqu2.equCoeff, tempEqu2.equCoeff, MAX_EQUATION_COEFF);
+				ippsMulC_32f(m_NodeFun[m_iDims][j*m_regionNum + i + m_iDims].equCoeff, m_coorInput[j].y, tempVal.equCoeff, MAX_EQUATION_COEFF);
+				ippsAdd_32f(tempVal.equCoeff, finalEqu.equCoeff, finalEqu.equCoeff, MAX_EQUATION_COEFF);
+			}
+			memcpy(m_paraEqu[i].xEqu.equCoeff, tempEqu2.equCoeff, sizeof(IMG_REAL)*MAX_EQUATION_COEFF);
+			memcpy(m_paraEqu[i].yEqu.equCoeff, finalEqu.equCoeff, sizeof(IMG_REAL)*MAX_EQUATION_COEFF);
+			tempCoor1.x = 0.f; tempCoor1.y = 0.f; tempCoor2.x = 0.f; tempCoor2.y = 0.f;
+			for (m = 0; m < m_paraEqu[i].xEqu.equPara; m++)
+			{
+				tempCoor1.x += m_paraEqu[i].xEqu.equCoeff[m] * pow((double)m_paraEqu[i].limits.x, m);
+				tempCoor1.y += m_paraEqu[i].yEqu.equCoeff[m] * pow((double)m_paraEqu[i].limits.x, m);
+				tempCoor2.x += m_paraEqu[i].xEqu.equCoeff[m] * pow((double)m_paraEqu[i].limits.y, m);
+				tempCoor2.y += m_paraEqu[i].yEqu.equCoeff[m] * pow((double)m_paraEqu[i].limits.y, m);
+			}
+			m_paraEqu[i].startPt = tempCoor1; m_paraEqu[i].endPt = tempCoor2;
+		}
+	}
+	else
+	{*/
+	/*if (m_bDebug)
+	{
+		m_clock.Click("Start Compute Equ:");
+	}*/
+	//m_paraEqu_deno = new VIS_PARA_EQUATION[m_iParaEquNums];
+	VIS_EQUATION denoEqu1, denoEqu2, finaldenoEqu1, finaldenoEqu2;
+	for (i = 0; i < m_iParaEquNums; i++)
+	{
+		m_paraEqu[i].limits.x = (double)m_rNode[i + m_iDims]; m_paraEqu[i].limits.y = (double)m_rNode[i + m_iDims + 1];
+		//m_paraEqu_deno[i].limits.x = (double)m_rNode[i + m_iDims]; m_paraEqu_deno[i].limits.y = (double)m_rNode[i + m_iDims + 1];
+		m_paraEqu[i].yEqu.equPara = m_iDims + 1; m_paraEqu[i].xEqu.equPara = m_iDims + 1;
+		//m_paraEqu_deno[i].yEqu.equPara = m_iDims + 1; m_paraEqu_deno[i].xEqu.equPara = m_iDims + 1;
+
+		tempEqu1.init(m_iDims); tempEqu2.init(m_iDims);
+		finalEqu.init(m_iDims); tempVal.init(m_iDims);
+		denoEqu1.init(m_iDims); denoEqu2.init(m_iDims);
+		finaldenoEqu1.init(m_iDims); finaldenoEqu2.init(m_iDims);
+		for (j = i; j < i + m_iDims + 1; j++)
+		{
+			ippsMulC_64f(NodeFun[m_iDims][j*regionNum + i + m_iDims].equCoeff, (double)m_coorInput[j].x, tempEqu1.equCoeff, m_iDims+1);
+			ippsAdd_64f(tempEqu1.equCoeff, tempEqu2.equCoeff, tempEqu2.equCoeff, m_iDims + 1);
+			//ippsAddC_64f(tempEqu2.equCoeff, (double)m_xMin, tempEqu2.equCoeff, m_iDims + 1);
+
+			ippsMulC_64f(NodeFun[m_iDims][j*regionNum + i + m_iDims].equCoeff, (double)m_coorInput[j].y, tempVal.equCoeff, m_iDims + 1);
+			ippsAdd_64f(tempVal.equCoeff, finalEqu.equCoeff, finalEqu.equCoeff, m_iDims + 1);
+			//ippsAddC_64f(finalEqu.equCoeff, (double)m_yMin, finalEqu.equCoeff, m_iDims + 1);
+			/*ippsMulC_64f(NodeFun[m_iDims][j*regionNum + i + m_iDims].equCoeff, (double)m_pCoorWeight[j], denoEqu1.equCoeff, m_iDims + 1);
+			ippsAdd_64f(denoEqu1.equCoeff, finaldenoEqu1.equCoeff, finaldenoEqu1.equCoeff, m_iDims + 1);
+			ippsMulC_64f(NodeFun[m_iDims][j*regionNum + i + m_iDims].equCoeff, (double)m_pCoorWeight[j], denoEqu2.equCoeff, m_iDims + 1);
+			ippsAdd_64f(denoEqu2.equCoeff, finaldenoEqu2.equCoeff, finaldenoEqu2.equCoeff, m_iDims + 1);*/
+		}
+		memcpy(m_paraEqu[i].xEqu.equCoeff, tempEqu2.equCoeff, sizeof(double)*(m_iDims + 1));
+		memcpy(m_paraEqu[i].yEqu.equCoeff, finalEqu.equCoeff, sizeof(double)*(m_iDims + 1));
+		//ippsMulC_64f(m_paraEqu[i].xEqu.equCoeff, (double)m_xRange, m_paraEqu[i].xEqu.equCoeff, m_iDims + 1);
+		//m_paraEqu[i].xEqu.equCoeff[0] += (double)m_xMin;
+		//ippsMulC_64f(m_paraEqu[i].yEqu.equCoeff, (double)m_yRange, m_paraEqu[i].yEqu.equCoeff, m_iDims + 1);
+		//m_paraEqu[i].yEqu.equCoeff[0] += (double)m_yMin;
+		//memcpy(m_paraEqu_deno[i].xEqu.equCoeff, finaldenoEqu1.equCoeff, sizeof(double)*(m_iDims + 1));
+		//memcpy(m_paraEqu_deno[i].yEqu.equCoeff, finaldenoEqu2.equCoeff, sizeof(double)*(m_iDims + 1));
+
+		tempCoor1.x = 0.f; tempCoor1.y = 0.f; tempCoor2.x = 0.f; tempCoor2.y = 0.f;
+		for (m = 0; m < m_paraEqu[i].xEqu.equPara; m++)
+		{
+			tempCoor1.x += m_paraEqu[i].xEqu.equCoeff[m] * pow(m_paraEqu[i].limits.x, m);
+			tempCoor1.y += m_paraEqu[i].yEqu.equCoeff[m] * pow(m_paraEqu[i].limits.x, m);
+			tempCoor2.x += m_paraEqu[i].xEqu.equCoeff[m] * pow(m_paraEqu[i].limits.y, m);
+			tempCoor2.y += m_paraEqu[i].yEqu.equCoeff[m] * pow(m_paraEqu[i].limits.y, m);
+		}
+		m_paraEqu[i].startPt = tempCoor1; m_paraEqu[i].endPt = tempCoor2;
+
+		/*tempCoor1.x = 0.f; tempCoor1.y = 0.f; tempCoor2.x = 0.f; tempCoor2.y = 0.f;
+		for (m = 0; m < m_paraEqu_deno[i].xEqu.equPara; m++)
+		{
+			tempCoor1.x += m_paraEqu_deno[i].xEqu.equCoeff[m] * pow((double)m_paraEqu_deno[i].limits.x, m);
+			tempCoor1.y += m_paraEqu_deno[i].yEqu.equCoeff[m] * pow((double)m_paraEqu_deno[i].limits.x, m);
+			tempCoor2.x += m_paraEqu_deno[i].xEqu.equCoeff[m] * pow((double)m_paraEqu_deno[i].limits.y, m);
+			tempCoor2.y += m_paraEqu_deno[i].yEqu.equCoeff[m] * pow((double)m_paraEqu_deno[i].limits.y, m);
+		}
+		m_paraEqu_deno[i].startPt = tempCoor1; m_paraEqu_deno[i].endPt = tempCoor2;*/
+	}
+	//}
+	m_deriEqu = new VIS_PARA_EQUATION[m_iParaEquNums];
+	IMG_INT paraNums = m_paraEqu[0].xEqu.equPara;
+	for (i = 0; i < m_iParaEquNums; i++)
+	{
+		m_deriEqu[i].limits = m_paraEqu[i].limits;
+		m_deriEqu[i].startPt = m_paraEqu[i].startPt;
+		m_deriEqu[i].endPt = m_paraEqu[i].endPt;
+		for (j = 0; j < paraNums - 1; j++)
+		{
+			m_deriEqu[i].xEqu.equPara = paraNums - 1;
+			m_deriEqu[i].yEqu.equPara = paraNums - 1;
+			m_deriEqu[i].xEqu.equCoeff[j] = m_paraEqu[i].xEqu.equCoeff[j + 1] * (j + 1)/* * (double)m_xRange*/;
+			m_deriEqu[i].yEqu.equCoeff[j] = m_paraEqu[i].yEqu.equCoeff[j + 1] * (j + 1)/* * (double)m_yRange*/;
+		}
+	}
+
+	/*if (m_bDebug)
+	{
+		m_clock.Click("End Compute Equ:");
+	}*/
+
+	for (int i = 0; i < FunBase; i++)
+	{
+		if (NodeFun[i])
+		{
+			delete[] NodeFun[i];
+			NodeFun[i] = nullptr;
+		}
+	}
+	if (NodeFun)
+	{
+		delete[]NodeFun;
+		NodeFun = nullptr;
+	}
+
+	return status;
+}
+
+IMG_INT CVisCurveFitting::SetDebugMode(bool debug, char* path)
+{
+	m_bDebug = debug;
+	char name[256];
+	sprintf(name, "%s", path);
+	if (m_bDebug)
+	{
+		bool status = true;
+		int val = 0;
+		int read_flag = _access(name, 4);
+		if (read_flag != 0)
+		{
+			val = _mkdir(name);
+			if (val != 0)
+			{
+				return -3;
+			}
+		}
+	}
+	const time_t t = time(NULL);
+	struct tm* current_time = localtime(&t);
+	string saveTime = std::to_string(current_time->tm_year + 1900) + std::to_string(current_time->tm_mon + 1) + std::to_string(current_time->tm_mday) +
+		std::to_string(current_time->tm_hour) + std::to_string(current_time->tm_min) + std::to_string(current_time->tm_sec);
+	sprintf(debugPath, "%s\\%s", name, saveTime.data());
+	if (m_bDebug)
+	{
+		bool status = true;
+		int val = 0;
+		int read_flag = _access(debugPath, 4);
+		if (read_flag != 0)
+		{
+			val = _mkdir(debugPath);
+			if (val != 0)
+			{
+				return -4;
+			}
+		}
+	}
+	//m_clock.Start();
+	return 0;
 };
+
+IMG_VVOID CVisCurveFitting::SetEdgePara(EDGEPARA edgePara)
+{
+	m_edgePara = edgePara;
+}
+IMG_VVOID CVisCurveFitting::SetEdgeSearLength(IMG_REAL len)
+{
+	m_rSearLen = len;
+}
+IMG_VVOID CVisCurveFitting::SetSampleInRegion(IMG_INT sample)
+{
+	m_regSample = sample;
+}
+
+IMG_VVOID CVisCurveFitting::SetFittingPara(IMG_REAL sigma, IMG_REAL sigmaCont, IMG_UINT times, IMG_REAL precision)
+{
+	m_sigma = sigma;
+	m_contSigma = sigmaCont;
+	m_iterNums = times;
+	m_precision = precision;
+}
+
+IMG_INT CVisCurveFitting::SetCurveNode(IMG_INT nums)
+{
+	/*if (rFittingNode)
+	{
+		delete[]rFittingNode;
+		rFittingNode = nullptr;
+	}
+	if (pWeight)
+	{
+		delete[]pWeight;
+		pWeight = nullptr;
+	}*/
+	if (nums < 2*(m_iDims + 1))
+	{
+		return -1;
+	}
+	m_iFittingNodeNums = nums;
+	/*rFittingNode = new IMG_REAL[m_iFittingNodeNums];
+	int status = NodeVector(rFittingNode, m_iFittingNodeNums, m_iDims, true);
+	if (status != 0)
+	{
+		return -2;
+	}
+	m_iWeightNums = m_iFittingNodeNums - m_iDims - 1;
+	pWeight = new IMG_REAL[m_iWeightNums];*/
+	//for (int i = 0; i < m_iFittingNodeNums; i++)
+	//{
+	//	rFittingNode[i] = rFittingNode[i] * 1.1f - 0.05;
+	//}
+	return 0;
+}
+//IMG_VVOID CVisCurveFitting::SetCurveType(VIS_CURVE_TYPE curveType, IMG_REAL *weight, IMG_INT nums)
+//{
+//	m_curveType = curveType;
+//	m_WeightNums = nums;
+//	if (nums > 0 && curveType == VIS_CURVE_TYPE::NURBS)
+//	{
+//		m_pCoorWeight = new IMG_REAL[nums];
+//		memcpy(m_pCoorWeight, weight, sizeof(IMG_REAL)*nums);
+//	}
+//}
+
+IMG_VVOID CVisCurveFitting::GetCoeffEquNums(IMG_INT &nums)
+{
+	nums = m_iParaEquNums;
+}
+IMG_VVOID CVisCurveFitting::GetCoeffEqu(VIS_PARA_EQUATION *&numeratorEqu, VIS_PARA_EQUATION *&denominatorEqu, IMG_INT nums)
+{
+	for (int i = 0; i < nums; i++)
+	{
+		numeratorEqu[i] = m_paraEqu[i];
+		//denominatorEqu[i] = m_paraEqu_deno[i];
+	}
+}
+
+IMG_VVOID CVisCurveFitting::GetCurveNodeNums(IMG_INT &nums)
+{
+	nums = m_iFittingNodeNums;
+}
+IMG_VVOID CVisCurveFitting::GetCurveNode(IMG_REAL *&node)
+{
+	memcpy(node, rFittingNode, sizeof(IMG_REAL)*m_iFittingNodeNums);
+}
+IMG_VVOID CVisCurveFitting::GetCurveWeightNums(IMG_INT &nums)
+{
+	nums = m_iWeightNums;
+}
+IMG_VVOID CVisCurveFitting::GetCurveWeight(IMG_REAL *&weight)
+{
+	memcpy(weight, pWeight, sizeof(IMG_REAL)*m_iWeightNums);
+}
+
+IMG_VVOID CVisCurveFitting::SetEdgeControlPts(IMG_RCOORD *coor, IMG_INT nums)
+{
+	m_iEdgeCont = nums;
+	if (m_iEdgeCont > 0)
+	{
+		m_pcoorEdgeCont = new IMG_RCOORD[m_iEdgeCont];
+		memcpy(m_pcoorEdgeCont, coor, sizeof(IMG_RCOORD)*m_iEdgeCont);
+	}
+}
+
+IMG_INT CVisCurveFitting::CurveFitting()
+{
+	int status = 0;
+	int i, j, k, m;
+	if (m_ptPair)
+	{
+		delete[]m_ptPair;
+		m_ptPair = nullptr;
+	}
+	if (rFittingNode)
+	{
+		delete[]rFittingNode;
+		rFittingNode = nullptr;
+	}
+	if (pWeight)
+	{
+		delete[]pWeight;
+		pWeight = nullptr;
+	}
+	if (m_pDisEqu)
+	{
+		delete[]m_pDisEqu;
+		m_pDisEqu = nullptr;
+	}
+	/*if (FittingBaseEqu)
+	{
+		delete[]FittingBaseEqu;
+		FittingBaseEqu = nullptr;
+	}*/
+	//m_iFittingNodeNums = m_iNodeNums;
+	if (m_iFittingNodeNums < 2 * (m_iDims + 1))
+	{
+		status = -2;
+		return status;
+	}
+	CVisClock clock;
+	if (m_bDebug)
+	{
+		clock.Start();
+		clock.Click("Start Search Edge pts:");
+	}
+	/*if (m_bDebug)
+	{
+		m_clock.Click("Start Search Edge pts:");
+	}*/
+	rFittingNode = new IMG_REAL[m_iFittingNodeNums];
+	//memcpy(rFittingNode, m_rNode, sizeof(IMG_REAL)*m_iFittingNodeNums);
+	status = NodeVector(rFittingNode, m_iFittingNodeNums, m_iDims, true);
+	if (status != 0)
+	{
+		return -2;
+	}
+	m_iWeightNums = m_iFittingNodeNums - m_iDims - 1;
+	pWeight = new IMG_REAL[m_iWeightNums];
+
+	status = SearchPointPair(m_ubbufSrc, m_paraEqu, m_iParaEquNums);
+	if (status != 0)
+	{
+		status = -1;
+		return status;
+	}
+	if (m_bDebug)
+	{
+		clock.Click("End Search Edge pts:");
+		clock.Click("Start Compute baseFun Equ:");
+	}
+	if (m_iEdgeCont > 0)
+	{
+		if (m_bDebug)
+		{
+			FILE *funfile;
+			char name[256];
+			sprintf(name, "%s\\controlEdgeCoor.txt", debugPath);
+			funfile = fopen(name, "w");
+			for (j = 0; j < m_iEdgeCont; j++)
+			{
+				fprintf(funfile, "%12.9e %12.9e\n", m_pcoorEdgeCont[j].x, m_pcoorEdgeCont[j].y);
+			}
+			fclose(funfile);
+		}
+		if (m_bDebug)
+		{
+			clock.Click("Start Add Control EdgePts:");
+		}
+		AddEdgeControlPts(m_pcoorEdgeCont, m_iEdgeCont);
+		if (m_bDebug)
+		{
+			clock.Click("End Add Control EdgePts:");
+		}
+	}
+	if (m_bDebug)
+	{
+		clock.Click("Start Compute baseFun Equ:");
+	}
+	
+	/*if (m_bDebug)
+	{
+		m_clock.Click("End Search Edge pts:");
+	}
+
+	if (m_bDebug)
+	{
+		m_clock.Click("Start Compute baseFun Equ:");
+	}*/
+	IMG_INT regionNum = m_iFittingNodeNums - 1;
+	VIS_EQUATION **NodeFun = new VIS_EQUATION *[m_iDims + 1];
+	IMG_INT FunBase = m_iDims + 1;
+	for (i = 0; i < m_iDims + 1; i++)
+	{
+		NodeFun[i] = new VIS_EQUATION[(m_iFittingNodeNums - 1 - i) * regionNum];
+		for (j = 0; j < (m_iFittingNodeNums - 1 - i) * regionNum; j++)
+		{
+			NodeFun[i][j].equPara = i + 1;
+		}
+	}
+	for (j = 0; j < m_iFittingNodeNums - 1; j++)
+	{
+		for (k = j; k < j + 1; k++)
+		{
+			if (rFittingNode[k + 1] > rFittingNode[k])
+			{
+				NodeFun[0][j*regionNum + k].equCoeff[0] = 1.0;
+			}
+		}
+	}
+	int mask = 1;
+	float deno1, deno2, deno3; deno1 = deno2 = deno3 = 0.f;
+	VIS_EQUATION tempEqu1, tempEqu2, finalEqu, tempVal;
+	for (i = 1; i < m_iDims + 1; i++)
+	{
+		for (j = 0; j < m_iFittingNodeNums - 1 - mask; j++)
+		{
+			for (k = 0; k < regionNum; k++)
+			{
+				deno1 = rFittingNode[j + i] - rFittingNode[j]; deno2 = rFittingNode[j + i + 1] - rFittingNode[j + 1];
+				if (ISZERO(deno1) && !ISZERO(deno2))
+				{
+					ippsMulC_64f(NodeFun[i - 1][(j + 1)*regionNum + k].equCoeff, (double)rFittingNode[j + i + 1], tempEqu1.equCoeff, i);
+					memcpy(tempEqu2.equCoeff + 1, NodeFun[i - 1][(j + 1)*regionNum + k].equCoeff, sizeof(double)*i);
+					tempEqu2.equCoeff[0] = 0.0;
+					ippsSub_64f(tempEqu2.equCoeff, tempEqu1.equCoeff, finalEqu.equCoeff, (i + 1));
+					ippsDivC_64f(finalEqu.equCoeff, (double)deno2, finalEqu.equCoeff, (i + 1));
+					memcpy(NodeFun[i][j*regionNum + k].equCoeff, finalEqu.equCoeff, sizeof(double)*(i + 1));
+				}
+				else if (!ISZERO(deno1) && ISZERO(deno2))
+				{
+					ippsMulC_64f(NodeFun[i - 1][(j)*regionNum + k].equCoeff, (double)rFittingNode[j], tempEqu1.equCoeff, i);
+					memcpy(tempEqu2.equCoeff + 1, NodeFun[i - 1][(j)*regionNum + k].equCoeff, sizeof(double)*(i));
+					tempEqu2.equCoeff[0] = 0.0;
+					ippsSub_64f(tempEqu1.equCoeff, tempEqu2.equCoeff, finalEqu.equCoeff, (i + 1));
+					ippsDivC_64f(finalEqu.equCoeff, (double)deno1, finalEqu.equCoeff, (i + 1));
+					memcpy(NodeFun[i][j*regionNum + k].equCoeff, finalEqu.equCoeff, sizeof(double)*(i + 1));
+				}
+				else if (ISZERO(deno1) && ISZERO(deno2))
+				{
+					memset(NodeFun[i][j*regionNum + k].equCoeff, 0.0, sizeof(IMG_REAL)*MAX_EQUATION_COEFF);
+				}
+				else
+				{
+					ippsMulC_64f(NodeFun[i - 1][(j)*regionNum + k].equCoeff, (double)rFittingNode[j], tempEqu1.equCoeff, i);
+					memcpy(tempEqu2.equCoeff + 1, NodeFun[i - 1][(j)*regionNum + k].equCoeff, sizeof(double)*(i));
+					tempEqu2.equCoeff[0] = 0.0;
+					ippsSub_64f(tempEqu1.equCoeff, tempEqu2.equCoeff, finalEqu.equCoeff, (i + 1));
+					ippsDivC_64f(finalEqu.equCoeff, (double)deno1, finalEqu.equCoeff, (i + 1));
+					memcpy(tempVal.equCoeff, finalEqu.equCoeff, sizeof(double)*(i + 1));
+
+					ippsMulC_64f(NodeFun[i - 1][(j + 1)*regionNum + k].equCoeff, rFittingNode[j + i + 1], tempEqu1.equCoeff, i);
+					memcpy(tempEqu2.equCoeff + 1, NodeFun[i - 1][(j + 1)*regionNum + k].equCoeff, sizeof(double)*(i));
+					tempEqu2.equCoeff[0] = 0.0;
+					ippsSub_64f(tempEqu2.equCoeff, tempEqu1.equCoeff, finalEqu.equCoeff, (i + 1));
+					ippsDivC_64f(finalEqu.equCoeff, (double)deno2, finalEqu.equCoeff, (i + 1));
+
+					ippsAdd_64f(tempVal.equCoeff, finalEqu.equCoeff, NodeFun[i][j*regionNum + k].equCoeff, (i + 1));
+					//memcpy(m_NodeFun[i][j*m_regionNum + k].equCoeff, finalEqu.equCoeff, sizeof(IMG_REAL)*MAX_EQUATION_COEFF);
+				}
+			}
+		}
+		mask++;
+	}
+	IMG_INT FitEquWidth = m_iFittingNodeNums - 2 * (m_iDims + 1) + 1;
+	IMG_INT FitEquHeight = m_iFittingNodeNums - 1 - m_iDims;
+	//m_FitEquWidth = m_iFittingNodeNums - 2 * (m_iDims + 1) + 1;
+	//m_FitEquHeight = m_iFittingNodeNums - 1 - m_iDims;
+	VIS_EQUATION *FittingBaseEqu = new VIS_EQUATION[FitEquWidth*FitEquHeight];
+	for (i = 0; i < FitEquHeight; i++)
+	{
+		for (j = 0; j < FitEquWidth; j++)
+		{
+			FittingBaseEqu[i*FitEquWidth + j] = NodeFun[m_iDims][i*regionNum + j + m_iDims];
+			FittingBaseEqu[i*FitEquWidth + j].limits.x = rFittingNode[j + m_iDims];
+			FittingBaseEqu[i*FitEquWidth + j].limits.y = rFittingNode[j + m_iDims + 1];
+		}
+	}
+	if (m_bDebug)
+	{
+		clock.Click("End Compute baseFun Equ:");
+	}
+
+	if (m_bDebug)
+	{
+		FILE *funfile;
+		char name[256];
+		sprintf(name, "%s\\basefun_edge.txt", debugPath);
+		funfile = fopen(name, "w");
+		for (i = 0; i < FitEquHeight; i++)
+		{
+			for (j = 0; j < FitEquWidth; j++)
+			{
+				float a1 = FittingBaseEqu[i*FitEquWidth + j].limits.x; float a2 = FittingBaseEqu[i*FitEquWidth + j].limits.y, a3;
+				double val1, val2;
+			
+				a3 = a2 - a1; a3 /= 100.f;
+				for (m = 0; m <= 100; m++)
+				{
+					val1 = a1 + m*a3;
+					val2 = FittingBaseEqu[i*FitEquWidth + j].equCoeff[0] + FittingBaseEqu[i*FitEquWidth + j].equCoeff[1] * val1 +
+						FittingBaseEqu[i*FitEquWidth + j].equCoeff[2] * val1*val1 + FittingBaseEqu[i*FitEquWidth + j].equCoeff[3] * val1*val1*val1;
+					fprintf(funfile, "%12.9e %12.9e\n", val1, val2);
+				}
+			}
+		}
+		fclose(funfile);
+	}
+
+	//IMG_INT baseFunNums = m_iFittingNodeNums - m_iDims - 1;
+	//IMG_REAL **pxBaseValue = new IMG_REAL*[baseFunNums];
+	//for (i = 0; i < baseFunNums; i++)
+	//{
+	//	pxBaseValue[i] = new IMG_REAL[m_ptPairNums];
+	//}
+	//for (i = 0; i < baseFunNums; i++)
+	//{
+	//	for (j = 0; j < m_ptPairNums; j++)
+	//	{
+	//		pxBaseValue[i][j] = BaseFunction(i, m_iDims, rFittingNode, m_iFittingNodeNums, m_ptPair[j].coeffVal);
+	//	}
+	//}
+
+	//if (m_bDebug)
+	//{
+	//	m_clock.Click("End Compute baseFun Equ:");
+	//}
+	IMG_REAL xInte = (rFittingNode[m_iFittingNodeNums - 1] - rFittingNode[0]) / (m_iFittingNodeNums - 1 - 2 * m_iDims);
+	IMG_REAL **pxBaseValue = new IMG_REAL*[FitEquHeight]();
+	for (i = 0; i < FitEquHeight; i++)
+	{
+		pxBaseValue[i] = new IMG_REAL[m_ptPairNums]();
+	}
+	for (i = 0; i < FitEquHeight; i++)
+	{
+		for (j = 0; j < m_ptPairNums; j++)
+		{
+			IMG_REAL para = m_ptPair[j].coeffVal;
+			IMG_INT node = floor((para - rFittingNode[0]) / xInte);
+			for (k = 0; k < m_iDims + 1; k++)
+			{
+				pxBaseValue[i][j] += FittingBaseEqu[i*FitEquWidth + node].equCoeff[k] * pow((IMG_LREAL)(para), k);
+			}	
+		}
+	}
+	if (m_bDebug)
+	{
+		clock.Click("Start Fitting weight:");
+	}
+	WeightFunction(m_ptPair, m_ptPairNums, pxBaseValue, FitEquHeight, m_ptPairNums, m_sigma, m_contSigma, m_addSigma, m_iterNums, m_precision);
+	if (m_bDebug)
+	{
+		clock.Click("End Fitting weight:");
+		clock.Click("Start Computing resDisFunction:");
+	}
+	m_iDisEquNums = FitEquWidth;
+	m_pDisEqu = new VIS_EQUATION[m_iDisEquNums];
+	for (i = 0; i < m_iDisEquNums; i++)
+	{
+		tempEqu2.init(m_iDims + 1);
+		for (j = i; j <= i + m_iDims; j++)
+		{
+			ippsMulC_64f(FittingBaseEqu[j*FitEquWidth + i].equCoeff, (double)pWeight[j], tempEqu1.equCoeff, m_iDims + 1);
+			ippsAdd_64f(tempEqu1.equCoeff, tempEqu2.equCoeff, tempEqu2.equCoeff, m_iDims + 1);
+		}
+		memcpy(m_pDisEqu[i].equCoeff, tempEqu2.equCoeff, sizeof(double)*(m_iDims + 1));
+		m_pDisEqu[i].equPara = m_iDims + 1;
+		m_pDisEqu[i].limits.x = rFittingNode[i + m_iDims];
+		m_pDisEqu[i].limits.y = rFittingNode[i + m_iDims + 1];
+	}
+	if (m_bDebug)
+	{
+		clock.Click("End Computing resDisFunction:");
+		char name[256];
+		clock.Click("finish all");
+		sprintf(name, "%s\\clock.log", debugPath);
+		clock.SetPath(name);
+		clock.SaveToFile();
+	}
+
+	for (int i = 0; i < FunBase; i++)
+	{
+		if (NodeFun[i])
+		{
+			delete[] NodeFun[i];
+			NodeFun[i] = nullptr;
+		}
+	}
+	if (NodeFun)
+	{
+		delete[]NodeFun;
+		NodeFun = nullptr;
+	}
+	for (int i = 0; i < FitEquHeight; i++)
+	{
+		if (pxBaseValue[i])
+		{
+			delete[] pxBaseValue[i];
+			pxBaseValue[i] = nullptr;
+		}
+	}
+	if (pxBaseValue)
+	{
+		delete[]pxBaseValue;
+		pxBaseValue = nullptr;
+	}
+	if (FittingBaseEqu)
+	{
+		delete[]FittingBaseEqu;
+		FittingBaseEqu = nullptr;
+	}
+	return status;
+}
+
+IMG_INT CVisCurveFitting::ClosedCurveFitting()
+{
+	int status = 0;
+	int i, j, k, m;
+	if (m_ptPair)
+	{
+		delete[]m_ptPair;
+		m_ptPair = nullptr;
+	}
+	if (rFittingNode)
+	{
+		delete[]rFittingNode;
+		rFittingNode = nullptr;
+	}
+	if (pWeight)
+	{
+		delete[]pWeight;
+		pWeight = nullptr;
+	}
+	if (m_pDisEqu)
+	{
+		delete[]m_pDisEqu;
+		m_pDisEqu = nullptr;
+	}
+	if (m_ClosedBaseFun)
+	{
+		delete[]m_ClosedBaseFun;
+		m_ClosedBaseFun = nullptr;
+	}
+	/*if (FittingBaseEqu)
+	{
+	delete[]FittingBaseEqu;
+	FittingBaseEqu = nullptr;
+	}*/
+	//m_iFittingNodeNums = m_iNodeNums;
+	if (m_iFittingNodeNums < 2 * (m_iDims + 1))
+	{
+		status = -2;
+		return status;
+	}
+	CVisClock clock;
+	if (m_bDebug)
+	{
+		clock.Start();
+		clock.Click("Start Search Edge pts:");
+	}
+	m_rCurveLength = 0.f;
+	/*if (m_bDebug)
+	{
+	m_clock.Click("Start Search Edge pts:");
+	}*/
+	rFittingNode = new IMG_REAL[m_iFittingNodeNums];
+	//memcpy(rFittingNode, m_rNode, sizeof(IMG_REAL)*m_iFittingNodeNums);
+	status = NodeVector(rFittingNode, m_iFittingNodeNums, m_iDims, false);
+	m_iWeightNums = m_iFittingNodeNums - 1;
+	float fInte = m_rNode[m_iNodeNums - m_iDims - 1] - m_rNode[m_iDims];
+	for (i = 0; i < m_iFittingNodeNums; i++)
+	{
+		rFittingNode[i] = rFittingNode[i] * fInte + m_rNode[m_iDims];
+	}
+	if (status != 0)
+	{
+		return -2;
+	}
+
+	pWeight = new IMG_REAL[m_iWeightNums];
+
+	IMG_RCOORD tempCoor1;
+	vector<IMG_RCOORD>vecCoor;
+	IMG_LREAL tPara, xInte_curve;
+	IMG_INT regCurve, curvePtNums;
+	xInte_curve = (double)(m_rNode[m_iDims + 1] - m_rNode[m_iDims]);
+	IMG_LREAL step = (double)(rFittingNode[m_iFittingNodeNums - 1] - rFittingNode[0]) / (double)(m_iParaEquNums * 50);
+	IMG_INT curveEquPara;
+	curveEquPara = m_iDims + 1;
+	for (i = 0; i < m_iParaEquNums * 50; i++)
+	{
+		tPara = i*step + rFittingNode[0];
+		regCurve = floor((tPara - m_rNode[m_iDims]) / xInte_curve);
+		tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+		for (j = 0; j < curveEquPara; j++)
+		{
+			tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((tPara), j);
+			tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((tPara), j);
+		}
+		vecCoor.push_back(tempCoor1);
+	}
+	curvePtNums = vecCoor.size();
+	for (i = 0; i < curvePtNums - 1; i++)
+	{
+		m_rCurveLength += (IMG_REAL)pow(pow(double(vecCoor[i].x - vecCoor[i + 1].x), 2) + pow(double(vecCoor[i].y - vecCoor[i + 1].y), 2), 0.5);
+	}
+	m_rCurveLength += (IMG_REAL)pow(pow(double(vecCoor[0].x - vecCoor[curvePtNums - 1].x), 2) + pow(double(vecCoor[0].y - vecCoor[curvePtNums - 1].y), 2), 0.5);
+	if (m_regSample == 0)
+	{
+		m_regSample = m_rCurveLength / m_iParaEquNums;
+	}
+	vecCoor.clear();
+	status = SearchPointPair_closed(m_ubbufSrc, m_paraEqu, m_iParaEquNums);
+	if (status != 0)
+	{
+		status = -1;
+		return status;
+	}
+	if (m_bDebug)
+	{
+		clock.Click("End Search Edge pts:");
+		clock.Click("Start Compute baseFun Equ:");
+	}
+	if (m_iEdgeCont > 0)
+	{
+		if (m_bDebug)
+		{
+			FILE *funfile;
+			char name[256];
+			sprintf(name, "%s\\controlEdgeCoor.txt", debugPath);
+			funfile = fopen(name, "w");
+			for (j = 0; j < m_iEdgeCont; j++)
+			{
+				fprintf(funfile, "%12.9e %12.9e\n", m_pcoorEdgeCont[j].x, m_pcoorEdgeCont[j].y);
+			}
+			fclose(funfile);
+		}
+		if (m_bDebug)
+		{
+			clock.Click("Start Add Control EdgePts:");
+		}
+		AddEdgeControlPts(m_pcoorEdgeCont, m_iEdgeCont);
+		if (m_bDebug)
+		{
+			clock.Click("End Add Control EdgePts:");
+		}
+	}
+	if (m_bDebug)
+	{
+		clock.Click("Start Compute baseFun Equ:");
+	}
+
+	/*if (m_bDebug)
+	{
+	m_clock.Click("End Search Edge pts:");
+	}
+
+	if (m_bDebug)
+	{
+	m_clock.Click("Start Compute baseFun Equ:");
+	}*/
+	IMG_INT regionNum = m_iDims + 1;
+	VIS_EQUATION **NodeFun = new VIS_EQUATION *[m_iDims + 1];
+	IMG_INT FunBase = m_iDims + 1;
+	for (i = 0; i < m_iDims + 1; i++)
+	{
+		NodeFun[i] = new VIS_EQUATION[(regionNum - i) * regionNum];
+		for (j = 0; j < (regionNum - i) * regionNum; j++)
+		{
+			NodeFun[i][j].equPara = i + 1;
+		}
+	}
+	for (j = 0; j < regionNum; j++)
+	{
+		k = j;
+		NodeFun[0][j*regionNum + k].equCoeff[0] = 1.0;
+	}
+	int mask = 1;
+	float deno1, deno2, deno3; deno1 = deno2 = deno3 = 0.f;
+	VIS_EQUATION tempEqu1, tempEqu2, finalEqu, tempVal;
+	for (i = 1; i < m_iDims + 1; i++)
+	{
+		for (j = 0; j < regionNum - mask; j++)
+		{
+			for (k = 0; k < regionNum; k++)
+			{
+				deno1 = rFittingNode[j + i] - rFittingNode[j]; deno2 = rFittingNode[j + i + 1] - rFittingNode[j + 1];
+				if (ISZERO(deno1) && !ISZERO(deno2))
+				{
+					ippsMulC_64f(NodeFun[i - 1][(j + 1)*regionNum + k].equCoeff, (double)rFittingNode[j + i + 1], tempEqu1.equCoeff, i);
+					memcpy(tempEqu2.equCoeff + 1, NodeFun[i - 1][(j + 1)*regionNum + k].equCoeff, sizeof(double)*i);
+					tempEqu2.equCoeff[0] = 0.0;
+					ippsSub_64f(tempEqu2.equCoeff, tempEqu1.equCoeff, finalEqu.equCoeff, (i + 1));
+					ippsDivC_64f(finalEqu.equCoeff, (double)deno2, finalEqu.equCoeff, (i + 1));
+					memcpy(NodeFun[i][j*regionNum + k].equCoeff, finalEqu.equCoeff, sizeof(double)*(i + 1));
+				}
+				else if (!ISZERO(deno1) && ISZERO(deno2))
+				{
+					ippsMulC_64f(NodeFun[i - 1][(j)*regionNum + k].equCoeff, (double)rFittingNode[j], tempEqu1.equCoeff, i);
+					memcpy(tempEqu2.equCoeff + 1, NodeFun[i - 1][(j)*regionNum + k].equCoeff, sizeof(double)*(i));
+					tempEqu2.equCoeff[0] = 0.0;
+					ippsSub_64f(tempEqu1.equCoeff, tempEqu2.equCoeff, finalEqu.equCoeff, (i + 1));
+					ippsDivC_64f(finalEqu.equCoeff, (double)deno1, finalEqu.equCoeff, (i + 1));
+					memcpy(NodeFun[i][j*regionNum + k].equCoeff, finalEqu.equCoeff, sizeof(double)*(i + 1));
+				}
+				else if (ISZERO(deno1) && ISZERO(deno2))
+				{
+					memset(NodeFun[i][j*regionNum + k].equCoeff, 0.0, sizeof(IMG_REAL)*MAX_EQUATION_COEFF);
+				}
+				else
+				{
+					ippsMulC_64f(NodeFun[i - 1][(j)*regionNum + k].equCoeff, (double)rFittingNode[j], tempEqu1.equCoeff, i);
+					memcpy(tempEqu2.equCoeff + 1, NodeFun[i - 1][(j)*regionNum + k].equCoeff, sizeof(double)*(i));
+					tempEqu2.equCoeff[0] = 0.0;
+					ippsSub_64f(tempEqu1.equCoeff, tempEqu2.equCoeff, finalEqu.equCoeff, (i + 1));
+					ippsDivC_64f(finalEqu.equCoeff, (double)deno1, finalEqu.equCoeff, (i + 1));
+					memcpy(tempVal.equCoeff, finalEqu.equCoeff, sizeof(double)*(i + 1));
+
+					ippsMulC_64f(NodeFun[i - 1][(j + 1)*regionNum + k].equCoeff, rFittingNode[j + i + 1], tempEqu1.equCoeff, i);
+					memcpy(tempEqu2.equCoeff + 1, NodeFun[i - 1][(j + 1)*regionNum + k].equCoeff, sizeof(double)*(i));
+					tempEqu2.equCoeff[0] = 0.0;
+					ippsSub_64f(tempEqu2.equCoeff, tempEqu1.equCoeff, finalEqu.equCoeff, (i + 1));
+					ippsDivC_64f(finalEqu.equCoeff, (double)deno2, finalEqu.equCoeff, (i + 1));
+
+					ippsAdd_64f(tempVal.equCoeff, finalEqu.equCoeff, NodeFun[i][j*regionNum + k].equCoeff, (i + 1));
+					//memcpy(m_NodeFun[i][j*m_regionNum + k].equCoeff, finalEqu.equCoeff, sizeof(IMG_REAL)*MAX_EQUATION_COEFF);
+				}
+			}
+		}
+		mask++;
+	}
+	if (m_bDebug)
+	{
+		FILE *funfile;
+		char name[256];
+		sprintf(name, "%s\\closedfittingcurve.txt", debugPath);
+		funfile = fopen(name, "w");
+		for (j = 0; j < regionNum - m_iDims; j++)
+		{
+			for (k = j; k < j + 4; k++)
+			{
+				float a1 = rFittingNode[k]; float a2 = rFittingNode[k + 1], a3;
+				double val1, val2;
+				if (ISZERO(a1 - a2))
+				{
+					continue;
+				}
+				else
+				{
+					a3 = a2 - a1; a3 /= 100.f;
+					for (m = 0; m <= 100; m++)
+					{
+						val1 = a1 + m*a3;
+						val2 = NodeFun[m_iDims][j*regionNum + k].equCoeff[0] + NodeFun[m_iDims][j*regionNum + k].equCoeff[1] * val1 +
+							NodeFun[m_iDims][j*regionNum + k].equCoeff[2] * val1*val1 + NodeFun[m_iDims][j*regionNum + k].equCoeff[3] * val1*val1*val1;
+						fprintf(funfile, "%12.9e %12.9e\n", val1, val2);
+					}
+				}
+			}
+		}
+		fclose(funfile);
+	}
+
+	m_ClosedBaseFunNums = regionNum;
+	m_ClosedBaseFun = new VIS_EQUATION[m_ClosedBaseFunNums];
+	memcpy(m_ClosedBaseFun, NodeFun[m_iDims], sizeof(VIS_EQUATION)*regionNum);
+
+	if (m_bDebug)
+	{
+		clock.Click("End Compute baseFun Equ:");
+	}
+
+	if (m_bDebug)
+	{
+		clock.Click("Start Fitting weight:");
+	}
+
+	if (m_bDebug)
+	{
+		FILE *funfile;
+		char name[256];
+		sprintf(name, "%s\\paraDis.txt", debugPath);
+		funfile = fopen(name, "w");
+		for (j = 0; j < m_ptPairNums; j++)
+		{
+			fprintf(funfile, "%12.9e %12.9e\n", m_ptPair[j].coeffVal, m_ptPair[j].ptDis);
+
+		}
+		fclose(funfile);
+	}
+
+	WeightFunction(m_ptPair, m_ptPairNums, m_sigma, m_contSigma, m_addSigma, m_iterNums, m_precision);
+	if (m_bDebug)
+	{
+		clock.Click("End Fitting weight:");
+		//clock.Click("Start Computing resDisFunction:");
+	}
+
+	if (m_bDebug)
+	{
+		clock.Click("End Computing resDisFunction:");
+		char name[256];
+		clock.Click("finish all");
+		sprintf(name, "%s\\clock.log", debugPath);
+		clock.SetPath(name);
+		clock.SaveToFile();
+	}
+
+	for (int i = 0; i < FunBase; i++)
+	{
+		if (NodeFun[i])
+		{
+			delete[] NodeFun[i];
+			NodeFun[i] = nullptr;
+		}
+	}
+	if (NodeFun)
+	{
+		delete[]NodeFun;
+		NodeFun = nullptr;
+	}
+
+	return status;
+}
+
+IMG_VVOID CVisCurveFitting::GetCurveEdge(IMG_INT regionSample, IMG_LREAL norLength, 
+	PARA_POINT *&coor, IMG_INT &nums, PARA_POINT *&upCoor, PARA_POINT *&downCoor, IMG_LRCOORD &meanUp, IMG_LRCOORD &meanDown)
+{
+	if (m_iDisEquNums == 0 || !m_pDisEqu)
+	{
+		nums = 0;
+		return;
+	}
+	
+	vector<PARA_POINT>vecCoor, vecUpCoor, vecDownCoor; PARA_POINT tempCoor, coorEdge, coorUp, coorDown;
+	//IMG_LRCOORD deriVal;
+	IMG_LREAL regionLen = (IMG_LREAL)(m_rNode[m_iNodeNums - m_iDims - 1] - m_rNode[m_iDims]) / (IMG_LREAL)m_iParaEquNums;
+	IMG_LREAL step = regionLen / regionSample;
+	IMG_LREAL /*tPara,*/ dis, angle, rxTemp, ryTemp, xInte_edge /*xInte_curve, xInte_edge, angle*/;
+	IMG_INT regCurve, regEdge;
+	xInte_edge = (rFittingNode[m_iFittingNodeNums - 1] - rFittingNode[0]) / (m_iFittingNodeNums - 1 - 2 * m_iDims);
+	//xInte_curve = (m_rNode[m_iNodeNums - 1] - m_rNode[0]) / (m_iNodeNums - 1 - 2 * m_iDims);
+	IMG_INT curveEquPara, edgeEquPara;
+	curveEquPara = edgeEquPara = m_iDims + 1;
+	//IMG_REAL *baseVal = new IMG_REAL[m_iWeightNums];
+	
+	IMG_LRCOORD meanPtUp, meanPtDown;
+	meanPtUp.x = meanPtUp.y = 0.0;
+	meanPtDown.x = meanPtDown.y = 0.0;
+	for (int i = 0; i < m_iParaEquNums; i++)
+	{
+		IMG_INT paraNum = m_paraEqu[i].xEqu.equPara;
+		for (int j = 0; j < regionSample; j++)
+		{
+			tempCoor.pt.x = 0.0; tempCoor.pt.y = 0.0;
+			rxTemp = ryTemp = 0.0;
+			tempCoor.para = m_paraEqu[i].limits.x + j*step;
+			dis = 0.f;
+			for (int k = 0; k < paraNum; k++)
+			{
+				tempCoor.pt.x += m_paraEqu[i].xEqu.equCoeff[k] * pow((tempCoor.para), k);
+				tempCoor.pt.y += m_paraEqu[i].yEqu.equCoeff[k] * pow((tempCoor.para), k);
+
+				rxTemp += m_deriEqu[i].xEqu.equCoeff[k] * pow((tempCoor.para), k);
+				ryTemp += m_deriEqu[i].yEqu.equCoeff[k] * pow((tempCoor.para), k);
+			}
+			regEdge = floor((tempCoor.para - rFittingNode[0]) / xInte_edge);
+			for (int k = 0; k < edgeEquPara; k++)
+			{
+				dis += m_pDisEqu[regEdge].equCoeff[k] * pow((IMG_LREAL)(tempCoor.para), k);
+			}
+			angle = atan2(ryTemp, rxTemp);
+			angle *= r2d;
+			if (angle < 0) { angle += 360; };
+			angle -= 90;
+			if (angle < 0) { angle += 360; };
+			
+			coorEdge.pt.x = tempCoor.pt.x + dis*cos(angle*d2r);
+			coorEdge.pt.y = tempCoor.pt.y + dis*sin(angle*d2r);
+			coorEdge.para = tempCoor.para;
+			vecCoor.push_back(coorEdge);
+			coorUp.pt.x = tempCoor.pt.x + norLength*cos(angle*d2r);
+			coorUp.pt.y = tempCoor.pt.y + norLength*sin(angle*d2r);
+			coorUp.pt.x = coorUp.pt.x + dis*cos(angle*d2r); coorUp.pt.y = coorUp.pt.y + dis*sin(angle*d2r);
+			coorUp.para = tempCoor.para;
+			meanPtUp.x += coorUp.pt.x; meanPtUp.y += coorUp.pt.y;
+
+			vecUpCoor.push_back(coorUp);
+			coorDown.pt.x = tempCoor.pt.x - norLength*cos(angle*d2r);
+			coorDown.pt.y = tempCoor.pt.y - norLength*sin(angle*d2r);
+			coorDown.pt.x = coorDown.pt.x + dis*cos(angle*d2r); coorDown.pt.y = coorDown.pt.y + dis*sin(angle*d2r);
+			coorDown.para = tempCoor.para;
+			meanPtDown.x += coorDown.pt.x; meanPtDown.y += coorDown.pt.y;
+			vecDownCoor.push_back(coorDown);
+
+		}
+	}
+	nums = vecCoor.size();
+	coor = new PARA_POINT[nums];
+	upCoor = new PARA_POINT[nums];
+	downCoor = new PARA_POINT[nums];
+	for (int i = 0; i < nums; i++)
+	{
+		coor[i] = vecCoor[i];
+		upCoor[i] = vecUpCoor[i];
+		downCoor[i] = vecDownCoor[i];
+	}
+	meanUp.x = meanPtUp.x / nums;
+	meanUp.y = meanPtUp.y / nums;
+	meanDown.x = meanPtDown.x / nums;
+	meanDown.y = meanPtDown.y / nums;
+	if (m_bDebug)
+	{
+		FILE *funfile;
+		char name[256];
+		sprintf(name, "%s\\curve_edgePts.txt", debugPath);
+		funfile = fopen(name, "w");
+		for (int j = 0; j < vecCoor.size(); j++)
+		{
+			fprintf(funfile, "%12.9e %12.9e\n", vecCoor[j].pt.x, vecCoor[j].pt.y);
+			fprintf(funfile, "%12.9e %12.9e\n", vecUpCoor[j].pt.x, vecUpCoor[j].pt.y);
+			fprintf(funfile, "%12.9e %12.9e\n", vecDownCoor[j].pt.x, vecDownCoor[j].pt.y);
+		}
+		fclose(funfile);
+	}
+
+	vecCoor.clear();
+	vecUpCoor.clear();
+	vecDownCoor.clear();
+}
+
+IMG_VVOID CVisCurveFitting::GetCurveEdge(IMG_INT regionSample, PARA_POINT *&coor, IMG_INT &nums)
+{
+	/*if (m_bDebug)
+	{
+		m_clock.Click("Start Compute EdgePts:");
+	}*/
+	if (m_iDisEquNums == 0 || !m_pDisEqu)
+	{
+		nums = 0;
+		return;
+	}
+	int i, j, k, m;
+	vector<PARA_POINT>vecCoor; PARA_POINT dstParaPt; 
+	IMG_LRCOORD tempCoor1, tempCoor2, deriVal;
+	IMG_LREAL step = 1.0 / (double)regionSample;
+	//IMG_LREAL step = (IMG_REAL)m_iDisEquNums / (IMG_REAL)regionSample;
+	IMG_LREAL tPara, dis, xInte_curve, xInte_edge, angle;
+	IMG_INT regCurve, regEdge;
+	xInte_edge = (rFittingNode[m_iFittingNodeNums - 1] - rFittingNode[0]) / (m_iFittingNodeNums - 1 - 2 * m_iDims);
+	xInte_curve = (m_rNode[m_iNodeNums - 1] - m_rNode[0]) / (m_iNodeNums - 1 - 2 * m_iDims);
+	IMG_INT curveEquPara, edgeEquPara;
+	curveEquPara = edgeEquPara = m_iDims + 1;
+	IMG_REAL *baseVal = new IMG_REAL[m_iWeightNums];
+	//IMG_RCOORD regionPt_start, regionPt_end, vectorRegion, edgePt;
+
+	for (i = 1; i < regionSample; i++)
+	{
+		tPara = i*step;
+		regCurve = floor((tPara - m_rNode[0]) / xInte_curve);
+		regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+		tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+		deriVal.x = 0.f; deriVal.y = 0.f;
+		for (j = 0; j < curveEquPara; j++)
+		{
+			tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((tPara), j);
+			tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((tPara), j);
+			deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((tPara), j);
+			deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((tPara), j);
+		}
+		memset(baseVal, 0, sizeof(IMG_REAL)*m_iWeightNums);
+		/*for (j = regEdge; j <= regEdge + m_iDims; j++)
+		{
+			for (k = 0; k < edgeEquPara; k++)
+			{
+				baseVal[j] += FittingBaseEqu[j*m_FitEquWidth + regEdge].equCoeff[k]* pow((IMG_LREAL)(tPara), k);
+			}
+		}
+		dis = cblas_sdot(m_iWeightNums, baseVal, 1, pWeight, 1);*/
+		dis = 0.f;
+		for (k = 0; k < edgeEquPara; k++)
+		{
+			dis += m_pDisEqu[regEdge].equCoeff[k] * pow((IMG_LREAL)(tPara), k);
+		}
+		
+		angle = atan2(deriVal.y, deriVal.x);
+		angle *= r2d;
+		if (angle < 0) { angle += 360; };
+		angle -= 90;
+		if (angle < 0) { angle += 360; };
+		//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+		dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+		dstParaPt.para = tPara;
+		vecCoor.push_back(dstParaPt);
+	}
+	nums = vecCoor.size();
+	coor = new PARA_POINT[nums];
+	for (int i = 0; i < nums; i++)
+	{
+		coor[i] = vecCoor[i];
+	}
+	if(m_bDebug)
+	{
+		FILE *funfile;
+		char name[256];
+		sprintf(name, "%s\\curve_edgePts.txt", debugPath);
+		funfile = fopen(name, "w");
+		for (int j = 0; j < vecCoor.size(); j++)
+		{
+			fprintf(funfile, "%12.9e %12.9e\n", vecCoor[j].pt.x, vecCoor[j].pt.y);
+
+		}
+		fclose(funfile);
+	}
+	
+
+	if (baseVal)
+	{
+		delete[]baseVal;
+		baseVal = nullptr;
+	}
+	vecCoor.clear();
+	/*if (m_bDebug)
+	{
+		m_clock.Click("End Compute EdgePts:");
+	}*/
+}
+
+IMG_VVOID CVisCurveFitting::GetCurvePts(IMG_INT regionSample, PARA_POINT *&coor, IMG_INT &nums, PARA_POINT *&upCoor, PARA_POINT *&downCoor, IMG_RCOORD &midVec)
+{
+	/*if (m_bDebug)
+	{
+		m_clock.Click("Start Compute CurvePts:");
+	}*/
+	vector<PARA_POINT>vecCoor, vecUpCoor, vecDownCoor; PARA_POINT tempCoor; PARA_POINT /*Coor,*/ coor1, coor2;;
+	//IMG_LREAL regionLen = 1 / (IMG_LREAL)m_iParaEquNums;
+	IMG_LREAL regionLen = (IMG_LREAL)(m_rNode[m_iNodeNums - m_iDims - 1] - m_rNode[m_iDims]) / (IMG_LREAL)m_iParaEquNums;
+	IMG_LREAL step = regionLen / regionSample;
+	/*IMG_REAL regionLen = 1;
+	IMG_LREAL step = regionLen / regionSample;*/
+	IMG_LREAL angle, rxTemp, ryTemp;
+	for (int i = 0; i < m_iParaEquNums; i++)
+	{
+		IMG_INT paraNum = m_paraEqu[i].xEqu.equPara;
+		for (int j = 0; j <= regionSample; j++)
+		{
+			tempCoor.pt.x = 0.0; tempCoor.pt.y = 0.0; /*Coor.pt.x = 0.f; Coor.pt.y = 0.f; */rxTemp = ryTemp = 0.0;
+			tempCoor.para = m_paraEqu[i].limits.x + j*step;
+			for (int k = 0; k < paraNum; k++)
+			{
+				tempCoor.pt.x += m_paraEqu[i].xEqu.equCoeff[k] * pow((tempCoor.para), k);
+				tempCoor.pt.y += m_paraEqu[i].yEqu.equCoeff[k] * pow((tempCoor.para), k);
+				//Coor.pt.x += m_paraEqu_deno[i].xEqu.equCoeff[k] * pow((IMG_LREAL)(tempCoor.para), k);
+				//Coor.pt.y += m_paraEqu_deno[i].yEqu.equCoeff[k] * pow((IMG_LREAL)(tempCoor.para), k);
+				rxTemp += m_deriEqu[i].xEqu.equCoeff[k]* pow((tempCoor.para), k);
+				ryTemp += m_deriEqu[i].yEqu.equCoeff[k] * pow((tempCoor.para), k);
+			}
+			//tempCoor.pt.x /= Coor.pt.x; tempCoor.pt.y /= Coor.pt.y;
+			//tempCoor.pt.x = tempCoor.pt.x*m_xRange + m_xMin; tempCoor.pt.y = tempCoor.pt.y*m_yRange + m_yMin;
+			vecCoor.push_back(tempCoor);
+			//angle = atan2(rxTemp, -ryTemp);
+			//rxTemp = rxTemp*m_xRange + m_xMin; ryTemp = ryTemp*m_yRange + m_yMin;
+			angle = atan2(ryTemp, rxTemp);
+			angle *= r2d;
+			if (angle < 0) { angle += 360; };
+			angle -= 90;
+			if (angle < 0) { angle += 360; };
+			coor1.pt.x = tempCoor.pt.x + m_rSearLen / 2.f*cos(angle*d2r); coor1.pt.y = tempCoor.pt.y + m_rSearLen / 2.f*sin(angle*d2r);
+			coor1.para = tempCoor.para;
+			vecUpCoor.push_back(coor1);
+			coor2.pt.x = tempCoor.pt.x - m_rSearLen / 2.f*cos(angle*d2r); coor2.pt.y = tempCoor.pt.y - m_rSearLen / 2.f*sin(angle*d2r);
+			coor2.para = tempCoor.para;
+			vecDownCoor.push_back(coor2);
+		}
+	}
+	nums = vecCoor.size();
+	coor = new PARA_POINT[nums];
+	upCoor = new PARA_POINT[nums];
+	downCoor = new PARA_POINT[nums];
+	for (int i = 0; i < nums; i++)
+	{
+		coor[i] = vecCoor[i];
+		upCoor[i] = vecUpCoor[i];
+		downCoor[i] = vecDownCoor[i];
+
+	}
+	
+	IMG_REAL midPara = vecUpCoor[(int)(nums / 2)].para;
+	IMG_INT xNode = floor((midPara - m_deriEqu[0].limits.x) / regionLen);
+	rxTemp = ryTemp = 0.f;
+	for (int k = 0; k < m_iDims+1; k++)
+	{
+		rxTemp += m_deriEqu[xNode].xEqu.equCoeff[k] * pow((IMG_LREAL)(midPara), k);
+		ryTemp += m_deriEqu[xNode].yEqu.equCoeff[k] * pow((IMG_LREAL)(midPara), k);
+	}
+	midVec.x = -ryTemp; midVec.y = rxTemp;
+	//midVec.x = midVec.x*m_xRange + m_xMin; midVec.y = midVec.y*m_yRange + m_yMin;
+
+	if (m_bDebug)
+	{
+		FILE *funfile1, *funfile2, *funfile3;
+		char name1[256], name2[256], name3[256];
+		sprintf(name1, "%s\\curve.txt", debugPath);
+		funfile1 = fopen(name1, "w");
+		for (int i = 0; i < vecCoor.size(); i++)
+		{
+			fprintf(funfile1, "%12.9e %12.9e\n", vecCoor[i].pt.x, vecCoor[i].pt.y);
+		}
+		fclose(funfile1);
+
+		sprintf(name2, "%s\\curve_up.txt", debugPath);
+		funfile2 = fopen(name2, "w");
+		for (int i = 0; i < vecUpCoor.size(); i++)
+		{
+			fprintf(funfile2, "%12.9e %12.9e\n", vecUpCoor[i].pt.x, vecUpCoor[i].pt.y);
+		}
+		fclose(funfile2);
+
+		sprintf(name3, "%s\\curve_down.txt", debugPath);
+		funfile3 = fopen(name3, "w");
+		for (int i = 0; i < vecDownCoor.size(); i++)
+		{
+			fprintf(funfile3, "%12.9e %12.9e\n", vecDownCoor[i].pt.x, vecDownCoor[i].pt.y);
+		}
+		fclose(funfile3);
+	}
+
+	vecCoor.clear();
+	vecDownCoor.clear();
+	vecUpCoor.clear();
+	/*if (m_bDebug)
+	{
+		m_clock.Click("End Compute CurvePts:");
+	}*/
+}
+
+IMG_INT CVisCurveFitting::NodeVector(IMG_REAL*NodeVector, IMG_INT nodeNums, IMG_INT dims, bool bRepNode)
+{
+	if (dims < 0 || nodeNums < dims + 2)
+	{
+		return -1;
+	}
+	IMG_REAL tempVal = 0.f;
+	IMG_INT flag = 0;
+	IMG_REAL tempPie = 0.f;
+	memset(NodeVector, 0.f, nodeNums * sizeof(IMG_REAL));
+	if (bRepNode)
+	{
+		if (nodeNums < 2 * (dims + 1))
+		{
+			return -1;
+		}
+		tempVal = nodeNums - 2 * dims - 1;
+		if (tempVal == 1)
+		{
+			for (int i = dims + 1; i < nodeNums; i++)
+			{
+				NodeVector[i] = 1;
+			}
+		}
+		else
+		{
+			while (flag < tempVal)
+			{
+				NodeVector[dims + 1 + flag] = NodeVector[dims + flag] + 1 / tempVal;
+				flag++;
+			}
+			for (int i = nodeNums - 1; i >= nodeNums - dims; i--)
+			{
+				NodeVector[i] = 1;
+			}
+		}
+		return 0;
+	}
+	else
+	{
+		tempPie = 1.f / (nodeNums - 1);
+		for (int i = 0; i < nodeNums; i++)
+		{
+			NodeVector[i] = i*tempPie;
+		}
+		return 0;
+	}
+}
+
+IMG_INT CVisCurveFitting::SearchPointPair(IMG_UBBUF &srcImg, VIS_PARA_EQUATION *&upEqu/*, VIS_PARA_EQUATION *&downEqu*/, IMG_INT equNums)
+{
+	vector<VIS_POINT_PAIR> vec_PtPair;
+	//VIS_POINT_PAIR ptPair;
+	//vector<IMG_RCOORD>vecCoor; 
+	IMG_LRCOORD tempCoor1;// IMG_RCOORD tempCoor2;
+	IMG_LREAL regionLen = (IMG_LREAL)(m_rNode[m_iNodeNums - m_iDims - 1] - m_rNode[m_iDims]) / (IMG_LREAL)equNums;
+	//IMG_REAL regionLen = rFittingNode[m_iDims + 1] - rFittingNode[m_iDims];
+	IMG_LREAL step = regionLen / m_regSample;
+	IMG_INT paraNum; IMG_LREAL coeffVa;
+	paraNum = m_paraEqu[0].xEqu.equPara;
+	IMG_LRCOORD regionPt_start, regionPt_end, searStart, searEnd, vectorRegion, verVec;
+	IMG_LREAL angle, angle1, deriValx, deriValy;
+	CVisEdge edgeClass;
+	edgeClass.SetEdgeDir(m_edgePara.m_edgeDir);
+	edgeClass.SetImage(&srcImg);
+	edgeClass.SetGaussFilterPara(m_edgePara.m_dGaussSigmaWidth, m_edgePara.m_dGaussSigmaHeight, m_edgePara.m_dGaussKerWidth, m_edgePara.m_dGaussKerHeight);
+	edgeClass.SetGradKernal(m_edgePara.m_iGradKernal);
+	edgeClass.SetGRADLEVEL_EDGE(m_edgePara.m_gradLevel, m_edgePara.m_iMinGrad);
+	edgeClass.SetLineWidth(m_edgePara.m_normalVari);
+	edgeClass.SetPriorSelect(m_edgePara.m_edgeSelect);
+	edgeClass.SetGradMethod(m_edgePara.m_gradMethod);
+	IMG_RCOORD *resCoor = nullptr; IMG_INT resNums = 0;
+
+	vector<SearchPoints>vecSearPts; SearchPoints searPt;
+	IMG_LRCOORD coorTemp = { 0,0 };
+	EDGE_INFORMATION *pEdgePt = nullptr;
+	for (int i = 0; i < equNums; i++)
+	{
+		//regionPt_start.x = m_paraEqu[i].startPt.x / m_paraEqu_deno[i].startPt.x;
+		//regionPt_start.y = m_paraEqu[i].startPt.y / m_paraEqu_deno[i].startPt.y;
+		//regionPt_end.x = m_paraEqu[i].endPt.x / m_paraEqu_deno[i].endPt.x;
+		//regionPt_end.y = m_paraEqu[i].endPt.y / m_paraEqu_deno[i].endPt.y;
+		//vectorRegion.x = regionPt_end.x - regionPt_start.x;   // 节节点向量
+		//vectorRegion.y = regionPt_end.y - regionPt_start.y;
+		//angle = atan2(vectorRegion.y, vectorRegion.x);
+		/*angle *= r2d;
+		if (angle < 0) { angle += 360; };
+		angle -= 90;
+		if (angle < 0) { angle += 360; };*/
+		int index = 0;
+
+		for (int j = 1; j < m_regSample; j++)
+		{
+			coeffVa = m_paraEqu[i].limits.x + j*step;
+			tempCoor1.x = 0.0; tempCoor1.y = 0.0; //tempCoor2.x = 0.f; tempCoor2.y = 0.f;
+			deriValx = deriValy = 0.f;
+			for (int k = 0; k < paraNum; k++)
+			{
+				tempCoor1.x += m_paraEqu[i].xEqu.equCoeff[k] * pow(coeffVa, k);
+				tempCoor1.y += m_paraEqu[i].yEqu.equCoeff[k] * pow(coeffVa, k);
+				//tempCoor2.x += m_paraEqu_deno[i].xEqu.equCoeff[k] * pow((IMG_LREAL)coeffVa, k);
+				//tempCoor2.y += m_paraEqu_deno[i].yEqu.equCoeff[k] * pow((IMG_LREAL)coeffVa, k);
+				deriValx += m_deriEqu[i].xEqu.equCoeff[k] * pow((coeffVa), k);
+				deriValy += m_deriEqu[i].yEqu.equCoeff[k] * pow((coeffVa), k);
+			}
+			//tempCoor1.x /= tempCoor2.x; tempCoor1.y /= tempCoor2.y;   // 得到曲线上的点
+			//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+
+			angle = atan2(deriValy, deriValx);
+			angle *= r2d;
+			if (angle < 0) { angle += 360; };
+			angle -= 90;
+			if (angle < 0) { angle += 360; };
+			searStart.x = tempCoor1.x - m_rSearLen / 2.f*cos(angle*d2r); searStart.y = tempCoor1.y - m_rSearLen / 2.f*sin(angle*d2r);
+			searEnd.x = tempCoor1.x + m_rSearLen / 2.f*cos(angle*d2r); searEnd.y = tempCoor1.y + m_rSearLen / 2.f*sin(angle*d2r);
+			edgeClass.SetLine({ (float)searStart.x,(float)searStart.y }, { (float)searEnd.x,(float)searEnd.y });
+			try {
+				edgeClass.FindEdgePts();
+			}
+			catch (CVisException &e)
+			{
+				index++;
+				continue;
+			}
+
+			edgeClass.GetEdge(pEdgePt, resNums);
+			if (resNums > 0)
+			{
+				/*if (j == 1) {
+				searPt.sampleDis = 0;
+				}
+				else*/
+				searPt.sampleDis = sqrt(pow(tempCoor1.x - coorTemp.x, 2) + pow(tempCoor1.y - coorTemp.y, 2));
+				for (int i = 0; i < resNums; i++)
+				{
+					searPt.coeffVal = coeffVa;
+					searPt.curvePt = tempCoor1;
+					searPt.edgePt.x = pEdgePt[i].rcoPos.x;
+					searPt.edgePt.y = pEdgePt[i].rcoPos.y;
+					if (resCoor)
+					{
+						delete[]resCoor;
+						resCoor = nullptr;
+					}
+					/*resNums = 0;*/
+					//ptPair.ptDis = ComputeVecDis(regionPt_start, regionPt_end, ptPair.curvePt, ptPair.edgePt);
+					angle1 = atan2(searPt.edgePt.y - searPt.curvePt.y, searPt.edgePt.x - searPt.curvePt.x);
+					angle1 *= r2d;
+					if (angle1 < 0) { angle1 += 360; };
+					if (fabs(angle - angle1) > 90)
+					{
+						searPt.ptDis = -(IMG_REAL)pow(pow(double(searPt.edgePt.x - searPt.curvePt.x), 2) +
+							pow(double(searPt.edgePt.y - searPt.curvePt.y), 2), 0.5);
+					}
+					else
+					{
+						searPt.ptDis = (IMG_REAL)pow(pow(double(searPt.edgePt.x - searPt.curvePt.x), 2) +
+							pow(double(searPt.edgePt.y - searPt.curvePt.y), 2), 0.5);
+					}
+					searPt.angle = pEdgePt[i].angle;
+					searPt.coPos = pEdgePt[i].coPos;
+					searPt.rcoPos = pEdgePt[i].rcoPos;
+					searPt.gradient = pEdgePt[i].gradient;
+					searPt.edgeID = index;
+					searPt.flag = 1;
+					searPt.searchID = i;
+					searPt.searchNums = resNums;
+
+					vecSearPts.push_back(searPt);
+					//s++;
+				}
+				index++;
+				if (pEdgePt)
+				{
+					delete[] pEdgePt;
+					pEdgePt = nullptr;
+				}
+			}
+			coorTemp = tempCoor1;
+		}
+	}
+	if (vecSearPts.size() > 1) {
+		vecSearPts[0].sampleDis = vecSearPts[1].sampleDis;
+	}
+
+	//IMG_UBBUF mask;
+	//mask.size = srcImg.size;
+	//mask.linestep = srcImg.linestep;
+	//mask.ptr = new IMG_UBYTE[mask.size.height*mask.size.width]();
+	////memcpy(mask.ptr, 0, sizeof(IMG_UBYTE)*mask.size.height*mask.size.width);
+	//for (int i = 0;i < vecSearPts.size();i++) {
+	//	mask.ptr[vecSearPts[i].coPos.x+vecSearPts[i].coPos.y*mask.linestep] = 255;
+	//}
+
+	SearchPoints *pSearPts = nullptr;
+	//SearchPoints* dstCoor = nullptr;
+	int SearNums = vecSearPts.size();
+	pSearPts = new SearchPoints[SearNums];
+	for (int i = 0; i < SearNums; i++)
+	{
+		pSearPts[i] = vecSearPts[i];
+	}
+#if(0)
+	/*begin:选择合适的边缘点*/
+	CVisEdgeFilter EdgeFilter;
+	SearchPoints *pSearPts = nullptr;
+	//SearchPoints* dstCoor = nullptr;
+	long dstLen = 0;
+	int SearNums = vecSearPts.size();
+	pSearPts = new SearchPoints[SearNums];
+	for (int i = 0; i < SearNums; i++)
+	{
+		pSearPts[i] = vecSearPts[i];
+	}
+	IMG_RCOORD* SelectPoint = new IMG_RCOORD[2];
+	if (m_iEdgeCont == 2) {
+		SelectPoint[0] = m_pcoorEdgeCont[0];
+		SelectPoint[1] = m_pcoorEdgeCont[1];
+	}
+	else {
+		SelectPoint[0] = m_coorInput[0];
+		SelectPoint[1] = m_coorInput[m_iPtNums - 1];
+	}
+
+	EdgeFilter.SetDebugMode(false, "C:\\Users\\bm00524\\Desktop\\data");
+	EdgeFilter.SetSample(m_regSample*equNums);
+	EdgeFilter.SetSeriesInfo(10, 0.4, 15);
+	if (!EdgeFilter.SetSelectEdges(SelectPoint, 2, true)) {
+		return -1;
+	}
+	EdgeFilter.EdgeFilter(pSearPts, SearNums);
+	dstLen = EdgeFilter.GetDstlen();
+	//EdgeFilter.GetResult(dstCoor, dstLen, SelectPoint, m_iEdgeCont);
+	/*end*/
+
+	//if (vec_PtPair.size() < 1)
+	//{
+	//	return -1;
+	//}
+	/*vec_PtPair.erase(vec_PtPair.begin());*/
+
+	if (m_bDebug) {
+
+		//char *debugPath = "C:\\Users\\bm00524\\Desktop\\data";
+
+		FILE *funfile;
+		char name[256];
+		sprintf(name, "%s\\alledgePts.txt", debugPath);
+		funfile = fopen(name, "w");
+		for (int j = 0; j < vecSearPts.size(); j++)
+		{
+			fprintf(funfile, "%12.9e %12.9e %12.9e %12.9e\n", vecSearPts[j].edgePt.x, vecSearPts[j].edgePt.y, vecSearPts[j].angle, vecSearPts[j].gradient);
+
+		}
+		fclose(funfile);
+
+	}
+
+	/*m_ptPairNums = vec_PtPair.size();*/
+	m_ptPairNums = dstLen;
+	if (m_ptPairNums == 0) {
+		/*if (dstCoor) {
+			delete[] dstCoor;
+			dstCoor = nullptr;
+		}*/
+		if (pSearPts) {
+			delete[] pSearPts;
+			pSearPts = nullptr;
+		}
+		if (SelectPoint) {
+			delete[] SelectPoint;
+			SelectPoint = nullptr;
+		}
+		return -1;
+	}
+#endif
+	m_ptPairNums = SearNums;
+	m_ptPair = new VIS_POINT_PAIR[m_ptPairNums + m_iEdgeCont];
+	//for (int i = 0; i < m_ptPairNums; i++)
+	//{
+	//	m_ptPair[i].coeffVal = dstCoor[i].coeffVal;
+	//	m_ptPair[i].curvePt = dstCoor[i].curvePt;
+	//	m_ptPair[i].edgePt = dstCoor[i].edgePt;
+	//	m_ptPair[i].ptDis = dstCoor[i].ptDis;
+	//}
+	for (int i = 0,k=0; i <SearNums&&k<m_ptPairNums + m_iEdgeCont; i++)
+	{
+		if (pSearPts[i].flag == 1) {
+			m_ptPair[k].coeffVal = pSearPts[i].coeffVal;
+			m_ptPair[k].curvePt = pSearPts[i].curvePt;
+			m_ptPair[k].edgePt = pSearPts[i].edgePt;
+			m_ptPair[k].ptDis = pSearPts[i].ptDis;
+			k++;
+		}		
+	}
+
+	/*if (m_bDebug) {
+		FILE *funfile;
+		char name[256];
+		sprintf(name, "%s\\selectedgePts.txt", debugPath);
+		funfile = fopen(name, "w");
+		for (int j = 0; j < m_ptPairNums; j++)
+		{
+			fprintf(funfile, "%12.9e %12.9e %12.9e %12.9e\n", dstCoor[j].edgePt.x, dstCoor[j].edgePt.y, dstCoor[j].angle, dstCoor[j].gradient);
+
+		}
+		fclose(funfile);
+
+	}*/
+	m_ptPairNums += m_iEdgeCont;
+	vec_PtPair.clear();
+	/*if (dstCoor) {
+		delete[] dstCoor;
+		dstCoor = nullptr;
+	}*/
+	if (pSearPts) {
+		delete[] pSearPts;
+		pSearPts = nullptr;
+	}
+#if(0)
+	if (SelectPoint) {
+		delete[] SelectPoint;
+		SelectPoint = nullptr;
+	}
+#endif
+	return 0;
+}
+
+IMG_INT CVisCurveFitting::SearchPointPair_closed(IMG_UBBUF &srcImg, VIS_PARA_EQUATION *&upEqu/*, VIS_PARA_EQUATION *&downEqu*/, IMG_INT equNums)
+{
+	vector<VIS_POINT_PAIR> vec_PtPair;
+	VIS_POINT_PAIR ptPair;
+	//vector<IMG_RCOORD>vecCoor; 
+	IMG_LRCOORD tempCoor1;// IMG_RCOORD tempCoor2;
+	IMG_LREAL regionLen = (IMG_LREAL)(m_rNode[m_iNodeNums - m_iDims - 1] - m_rNode[m_iDims]) / (IMG_LREAL)equNums;
+	//IMG_REAL regionLen = rFittingNode[m_iDims + 1] - rFittingNode[m_iDims];
+	IMG_LREAL step = regionLen / m_regSample;
+	IMG_INT paraNum; IMG_LREAL coeffVa;
+	paraNum = m_paraEqu[0].xEqu.equPara;
+	IMG_LRCOORD regionPt_start, regionPt_end, searStart, searEnd, vectorRegion, verVec;
+	IMG_LREAL angle, angle1, deriValx, deriValy;
+	CVisEdge edgeClass;
+	edgeClass.SetEdgeDir(m_edgePara.m_edgeDir);
+	if(m_ubbufMask&&m_ubbufMask->size.width==srcImg.size.width&&m_ubbufMask->size.height == srcImg.size.height)
+		edgeClass.SetImage(&srcImg,m_ubbufMask);
+	else	
+		edgeClass.SetImage(&srcImg);
+	edgeClass.SetGaussFilterPara(m_edgePara.m_dGaussSigmaWidth, m_edgePara.m_dGaussSigmaHeight, m_edgePara.m_dGaussKerWidth, m_edgePara.m_dGaussKerHeight);
+	edgeClass.SetGradKernal(m_edgePara.m_iGradKernal);
+	edgeClass.SetGRADLEVEL_EDGE(m_edgePara.m_gradLevel, m_edgePara.m_iMinGrad);
+	edgeClass.SetLineWidth(m_edgePara.m_normalVari);
+	edgeClass.SetPriorSelect(m_edgePara.m_edgeSelect);
+	edgeClass.SetGradMethod(m_edgePara.m_gradMethod);
+	edgeClass.SetPixelOffset(m_edgePara.m_fOffset);
+	IMG_RCOORD *resCoor = nullptr; IMG_INT resNums = 0;
+	for (int i = 0; i < equNums; i++)
+	{
+		//regionPt_start.x = m_paraEqu[i].startPt.x / m_paraEqu_deno[i].startPt.x;
+		//regionPt_start.y = m_paraEqu[i].startPt.y / m_paraEqu_deno[i].startPt.y;
+		//regionPt_end.x = m_paraEqu[i].endPt.x / m_paraEqu_deno[i].endPt.x;
+		//regionPt_end.y = m_paraEqu[i].endPt.y / m_paraEqu_deno[i].endPt.y;
+		//vectorRegion.x = regionPt_end.x - regionPt_start.x;   // 节节点向量
+		//vectorRegion.y = regionPt_end.y - regionPt_start.y;
+		//angle = atan2(vectorRegion.y, vectorRegion.x);
+		/*angle *= r2d;
+		if (angle < 0) { angle += 360; };
+		angle -= 90;
+		if (angle < 0) { angle += 360; };*/
+		for (int j = 1; j < m_regSample; j++)
+		{
+			coeffVa = m_paraEqu[i].limits.x + j*step;
+			tempCoor1.x = 0.0; tempCoor1.y = 0.0; //tempCoor2.x = 0.f; tempCoor2.y = 0.f;
+			deriValx = deriValy = 0.f;
+			for (int k = 0; k < paraNum; k++)
+			{
+				tempCoor1.x += m_paraEqu[i].xEqu.equCoeff[k] * pow(coeffVa, k);
+				tempCoor1.y += m_paraEqu[i].yEqu.equCoeff[k] * pow(coeffVa, k);
+				//tempCoor2.x += m_paraEqu_deno[i].xEqu.equCoeff[k] * pow((IMG_LREAL)coeffVa, k);
+				//tempCoor2.y += m_paraEqu_deno[i].yEqu.equCoeff[k] * pow((IMG_LREAL)coeffVa, k);
+				deriValx += m_deriEqu[i].xEqu.equCoeff[k] * pow((coeffVa), k);
+				deriValy += m_deriEqu[i].yEqu.equCoeff[k] * pow((coeffVa), k);
+			}
+			//tempCoor1.x /= tempCoor2.x; tempCoor1.y /= tempCoor2.y;   // 得到曲线上的点
+			//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+			angle = atan2(deriValy, deriValx);
+			angle *= r2d;
+			if (angle < 0) { angle += 360; };
+			angle -= 90;
+			if (angle < 0) { angle += 360; };
+			searStart.x = tempCoor1.x - m_rSearLen / 2.f*cos(angle*d2r); searStart.y = tempCoor1.y - m_rSearLen / 2.f*sin(angle*d2r);
+			searEnd.x = tempCoor1.x + m_rSearLen / 2.f*cos(angle*d2r); searEnd.y = tempCoor1.y + m_rSearLen / 2.f*sin(angle*d2r);
+			if (curveAdjustEdgeLine(searStart, searEnd, srcImg) != 0)
+				continue;
+			edgeClass.SetLine({ (float)searStart.x,(float)searStart.y }, { (float)searEnd.x,(float)searEnd.y });
+			edgeClass.FindEdgePts();
+			edgeClass.GetEdgePts(resCoor, resNums);
+			if (resNums > 0)
+			{
+				ptPair.coeffVal = coeffVa;
+				ptPair.curvePt = tempCoor1;
+				ptPair.edgePt.x = (double)resCoor[0].x; ptPair.edgePt.y = (double)resCoor[0].y;
+				if (resCoor)
+				{
+					delete[]resCoor;
+					resCoor = nullptr;
+				}
+				resNums = 0;
+				//ptPair.ptDis = ComputeVecDis(regionPt_start, regionPt_end, ptPair.curvePt, ptPair.edgePt);
+				angle1 = atan2(ptPair.edgePt.y - ptPair.curvePt.y, ptPair.edgePt.x - ptPair.curvePt.x);
+				angle1 *= r2d;
+				if (angle1 < 0) { angle1 += 360; };
+				if (fabs(angle - angle1) > 90)
+				{
+					ptPair.ptDis = -(IMG_REAL)pow(pow(double(ptPair.edgePt.x - ptPair.curvePt.x), 2) +
+						pow(double(ptPair.edgePt.y - ptPair.curvePt.y), 2), 0.5);
+				}
+				else
+				{
+					ptPair.ptDis = (IMG_REAL)pow(pow(double(ptPair.edgePt.x - ptPair.curvePt.x), 2) +
+						pow(double(ptPair.edgePt.y - ptPair.curvePt.y), 2), 0.5);
+				}
+				vec_PtPair.push_back(ptPair);
+			}
+			else
+			{
+				continue;
+			}
+		}
+	}
+	if (vec_PtPair.size() < 1)
+	{
+		return -1;
+	}
+	vec_PtPair.erase(vec_PtPair.begin());
+
+	if (m_bDebug)
+	{
+		FILE *funfile;
+		char name[256];
+		sprintf(name, "%s\\edgePts.txt", debugPath);
+		funfile = fopen(name, "w");
+		for (int j = 0; j < vec_PtPair.size(); j++)
+		{
+			fprintf(funfile, "%12.9e %12.9e\n", vec_PtPair[j].edgePt.x, vec_PtPair[j].edgePt.y);
+
+		}
+		fclose(funfile);
+	}
+
+
+	m_ptPairNums = vec_PtPair.size();
+	m_ptPair = new VIS_POINT_PAIR[m_ptPairNums + m_iEdgeCont];
+	for (int i = 0; i < m_ptPairNums; i++)
+	{
+		m_ptPair[i] = vec_PtPair[i];
+	}
+	m_ptPairNums += m_iEdgeCont;
+	vec_PtPair.clear();
+	return 0;
+}
+
+IMG_REAL CVisCurveFitting::ComputeVecDis(IMG_RCOORD srcStart, IMG_RCOORD srcEndt, IMG_RCOORD dstStart, IMG_RCOORD dstEnd)
+{
+	IMG_RCOORD vecCoor1, vecCoor2;
+	vecCoor1.x = srcEndt.x - srcStart.x; vecCoor1.y = srcEndt.y - srcStart.y;
+	vecCoor2.x = dstEnd.x - dstStart.x; vecCoor2.y = dstEnd.y - dstStart.y;
+	IMG_REAL dis;
+	dis = (IMG_REAL)pow(pow(double(dstStart.x - dstEnd.x), 2) + pow(double(dstStart.y - dstEnd.y), 2), 0.5);
+	if ((vecCoor1.x*vecCoor2.y - vecCoor1.y*vecCoor2.x) > 0)
+	{
+		return dis;
+	}
+	else
+	{
+		return -dis;
+	}
+}
+
+IMG_REAL CVisCurveFitting::BaseFunction(IMG_INT index, IMG_INT dims, IMG_REAL*NodeVector,
+	IMG_INT nodeNums, IMG_REAL input)
+{
+	//IMG_REAL result;
+	if (index > nodeNums - dims - 2 || index < 0)
+	{
+		return -12.f;
+	}
+	if (dims == 0)
+	{
+		if (input >= NodeVector[index] && input < NodeVector[index + 1])
+		{
+			return 1.f;
+		}
+		else
+		{
+			return 0.f;
+		}
+	}
+	else
+	{
+		IMG_REAL length1 = NodeVector[index + dims] - NodeVector[index];
+		IMG_REAL length2 = NodeVector[index + dims + 1] - NodeVector[index + 1];
+		IMG_REAL temp1 = 0.f, temp2 = 0.f;
+		if (length1 - 0.f < 1e-5)
+		{
+			temp1 = 0.f;
+		}
+		else
+		{
+			temp1 = (input - NodeVector[index]) / length1;
+		}
+		if (length2 - 0.f < 1e-5)
+		{
+			temp2 = 0.f;
+		}
+		else
+		{
+			temp2 = (NodeVector[index + dims + 1] - input) / length2;
+		}
+
+		return temp1 * BaseFunction(index, dims - 1, NodeVector, nodeNums, input)
+			+ temp2 * BaseFunction(index + 1, dims - 1, NodeVector, nodeNums, input);
+	}
+
+}
+
+IMG_INT CVisCurveFitting::WeightFunction(VIS_POINT_PAIR *&pointPair, const IMG_INT ptPairNums, IMG_REAL **pBaseFunVal, IMG_INT baseFunNums,
+	IMG_INT dataNums, IMG_REAL &Sigma, IMG_REAL &SigmaCont, IMG_REAL &addSigma, const IMG_UINT &IteMaxTimes, const IMG_REAL &ItePrecision)
+{
+	IMG_LREAL *MatA = nullptr, *MatB = nullptr, *MatC = nullptr;
+	IMG_LREAL *MatACopy = nullptr, *Weight = nullptr, *MatCCopy = nullptr, *ErrorRecord = nullptr;
+	IMG_LREAL *MatBRecord = nullptr;
+
+	MatA = new IMG_LREAL[dataNums * baseFunNums + baseFunNums*baseFunNums]();
+	MatB = new IMG_LREAL[baseFunNums];
+	MatC = new IMG_LREAL[dataNums + baseFunNums]();
+	int i, j, k, m, n;
+	int IterTimes = 0;
+	int contLen = 0, length = 0;
+
+	IMG_REAL xTemp, yTemp, xInte;
+	IMG_INT xNode;
+	xInte = (rFittingNode[m_iFittingNodeNums - 1] - rFittingNode[0]) / (m_iFittingNodeNums - 1 - 2 * m_iDims);
+	//yInte = (rFittingNode[m_iFittingNodeNums - 1] - rFittingNode[0]) / (m_iFittingNodeNums - 1 - 2 * m_iDims);
+
+	for (i = 0; i < dataNums; i++)
+	{
+		xNode = floor((pointPair[i].coeffVal - rFittingNode[0]) / xInte) + m_iDims; 
+		for (j = xNode - m_iDims; j <= xNode; j++)
+		{
+			MatA[length*baseFunNums + j] = pBaseFunVal[j][i];
+		}
+		MatC[length] = pointPair[i].ptDis;
+		length++;
+	}
+	if (m_bDebug)
+	{
+		FILE *funfile;
+		char name[256];
+		sprintf(name, "%s\\Dis.txt", debugPath);
+		funfile = fopen(name, "w");
+		for (int j = 0; j <= ptPairNums; j++)
+		{
+			fprintf(funfile, "%12.9e \n", pointPair[j].ptDis);
+
+		}
+		fclose(funfile);
+	}
+
+	switch (m_ContType)
+	{
+	case NOORDER:
+		break;
+	case ZEROORDER:
+		for (i = 1; i < baseFunNums; i++)
+		{
+			MatA[length * baseFunNums + i - 1] = 1.0; MatA[length * baseFunNums + i] = -1.0;
+			length++;
+			contLen++;
+		}
+		break;
+	case ONEORDER:
+		for (i = 1; i < baseFunNums - 1; i++)
+		{
+			MatA[length *baseFunNums + i - 1] = 1.0; MatA[length *baseFunNums + i + 1] = 1.0;
+			MatA[length *baseFunNums + i] = -2.0;
+			length++;
+			contLen++;
+		}
+		break;
+	default:
+		break;
+	}
+
+	ErrorRecord = new IMG_LREAL[IteMaxTimes]();
+	MatBRecord = new IMG_LREAL[IteMaxTimes*baseFunNums];
+	MatACopy = new IMG_LREAL[baseFunNums * length];
+	MatCCopy = new IMG_LREAL[length];
+	memcpy(MatCCopy, MatC, sizeof(double)*length);
+	memcpy(MatACopy, MatA, sizeof(double)*baseFunNums * length);
+	Weight = new IMG_LREAL[length];
+	LAPACKE_dgels(LAPACK_ROW_MAJOR, 'N', length, baseFunNums, 1, MatACopy, baseFunNums, MatCCopy, 1);
+	memcpy(MatB, MatCCopy, baseFunNums * sizeof(IMG_LREAL));
+	memcpy(MatCCopy, MatC, sizeof(double)*length);
+	
+	double mena;
+	while (1)
+	{
+		cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, length, 1, baseFunNums, 1, MatA, baseFunNums, MatB, 1, -1, MatCCopy, 1);
+		//ErrorRecord[IterTimes * weightNums] = 0;
+		ippsAbs_64f(MatCCopy, MatCCopy, length);
+		ippsMean_64f(MatCCopy, length, &ErrorRecord[IterTimes]);
+		if (IterTimes == 0)
+		{
+			Sigma = ErrorRecord[IterTimes];
+			SigmaCont = 0.5*Sigma;
+			addSigma = 20 * Sigma;
+		}
+		if (m_bDebug)
+		{
+			FILE *funfile;
+			char name[256];
+			sprintf(name, "%s\\AX-B%d.txt", debugPath, IterTimes);
+			funfile = fopen(name, "w");
+			for (int j = 0; j < length; j++)
+			{
+				fprintf(funfile, "%12.9e \n", MatCCopy[j]);
+
+			}
+			fclose(funfile);
+		}
+
+		memcpy(MatBRecord + IterTimes*baseFunNums, MatB, baseFunNums * sizeof(IMG_LREAL));
+		if ((IterTimes >= 1 && abs(ErrorRecord[IterTimes] - ErrorRecord[(IterTimes - 1)]) <= ItePrecision)
+			|| (IterTimes >= 0 && ErrorRecord[IterTimes] - 0.0f < 1e-7))
+		{
+
+			break;
+		}
+		if (IterTimes == IteMaxTimes - 1)
+		{
+			double minVal;
+			int minIndex;
+			ippsMinIndx_64f(ErrorRecord, IteMaxTimes, &minVal, &minIndex);
+			memcpy(MatB, MatBRecord + minIndex*baseFunNums, baseFunNums * sizeof(IMG_LREAL));
+			break;
+		}
+		for (i = 0; i < length - contLen - m_iEdgeCont; i++)
+		{
+			Weight[i] = 1.0 / (1.f + exp(MatCCopy[i] * MatCCopy[i] / (Sigma*Sigma)));
+			ippsMulC_64f(MatA + i*baseFunNums, Weight[i], MatACopy + i*baseFunNums, baseFunNums);
+			MatCCopy[i] = MatC[i] * Weight[i];
+		}
+		for (i = length - contLen - m_iEdgeCont; i < length - contLen; i++)
+		{
+			Weight[i] = 1.0 / (1.f + exp(MatCCopy[i] * MatCCopy[i] / (addSigma*addSigma)));
+			ippsMulC_64f(MatA + i*baseFunNums, Weight[i], MatACopy + i*baseFunNums, baseFunNums);
+			MatCCopy[i] = MatC[i] * Weight[i];
+		}
+		for (i = length - contLen; i < length; i++)
+		{
+			Weight[i] = 1.0 / (1.f + exp(MatCCopy[i] * MatCCopy[i] / (SigmaCont*SigmaCont)));
+			ippsMulC_64f(MatA + i*baseFunNums, Weight[i], MatACopy + i*baseFunNums, baseFunNums);
+			MatCCopy[i] = MatC[i] * Weight[i];
+		}
+
+		LAPACKE_dgels(LAPACK_ROW_MAJOR, 'N', length, baseFunNums, 1, MatACopy, baseFunNums, MatCCopy, 1);
+		memcpy(MatB, MatCCopy, baseFunNums * sizeof(IMG_LREAL));
+		memcpy(MatCCopy, MatC, sizeof(double)*length);
+		IterTimes++;
+	}
+	if (m_bDebug)
+	{
+		FILE *funfile;
+		char name[256];
+		sprintf(name, "%s\\FittingError.txt", debugPath);
+		funfile = fopen(name, "w");
+		fprintf(funfile, "Sigma:%12.9e \n", Sigma);
+		fprintf(funfile, "SigmaCont:%12.9e \n", SigmaCont);
+		fprintf(funfile, "IteMaxTimes:%d \n", IterTimes);
+		fprintf(funfile, "ItePrecision:%12.9e \n", ItePrecision);
+		fprintf(funfile, "ptLen:%d \n", length - contLen);
+		fprintf(funfile, "contLen:%d \n", contLen);
+		fprintf(funfile, "Error: \n");
+		for (int j = 0; j <= IterTimes; j++)
+		{
+			fprintf(funfile, "%12.9e \n", ErrorRecord[j]);
+
+		}
+		fclose(funfile);
+	}
+
+	for (i = 0; i < baseFunNums; i++)
+	{
+		pWeight[i]=(IMG_REAL)MatB[i];
+	}
+
+	if (MatA)
+	{
+		delete[]MatA;
+		MatA = nullptr;
+	}
+	if (MatB)
+	{
+		delete[]MatB;
+		MatB = nullptr;
+	}
+	if (MatC)
+	{
+		delete[]MatC;
+		MatC = nullptr;
+	}
+	if (MatACopy)
+	{
+		delete[]MatACopy;
+		MatACopy = nullptr;
+	}
+	if (ErrorRecord)
+	{
+		delete[]ErrorRecord;
+		ErrorRecord = nullptr;
+	}
+	if (MatCCopy)
+	{
+		delete[]MatCCopy;
+		MatCCopy = nullptr;
+	}
+	if (Weight)
+	{
+		delete[]Weight;
+		Weight = nullptr;
+	}
+	if (MatBRecord)
+	{
+		delete[]MatBRecord;
+		MatBRecord = nullptr;
+	}
+	return 0;
+}
+IMG_INT CVisCurveFitting::WeightFunction(VIS_POINT_PAIR *&pointPair, const IMG_INT ptPairNums,
+	IMG_REAL &Sigma, IMG_REAL &SigmaCont, IMG_REAL &addSigma, const IMG_UINT &IteMaxTimes, const IMG_REAL &ItePrecision)
+{
+	IMG_LREAL *MatA = nullptr, *MatB = nullptr, *MatC = nullptr;
+	IMG_LREAL *MatACopy = nullptr, *Weight = nullptr, *MatCCopy = nullptr, *ErrorRecord = nullptr;
+	IMG_LREAL *MatBRecord = nullptr;
+
+	MatA = new IMG_LREAL[m_iWeightNums * ptPairNums + m_iWeightNums*m_iWeightNums]();
+	MatB = new IMG_LREAL[m_iWeightNums];
+	MatC = new IMG_LREAL[ptPairNums + m_iWeightNums]();
+	int i, j, k, m, n;
+	int IterTimes = 0;
+	int contLen = 0, length = 0, index = 0;
+
+	IMG_REAL xTemp, xInte;
+	double valTemp;
+	int xNode;
+	xInte = (rFittingNode[1] - rFittingNode[0]);
+
+	for (i = 0; i < ptPairNums; i++)
+	{
+		xNode = floor((pointPair[i].coeffVal - rFittingNode[0]) / xInte);
+		xTemp = pointPair[i].coeffVal - xNode*xInte;
+		index = m_iDims;
+		for (j = xNode - m_iDims; j <= xNode; j++)
+		{
+			k = j;
+			if (k < 0) { k += m_iWeightNums; };
+			valTemp = 0.0;
+			for (m = 0; m < m_iDims + 1; m++)
+			{
+				valTemp += m_ClosedBaseFun[index].equCoeff[m] * pow((double)(xTemp + index*xInte), m);
+			}
+			MatA[length*m_iWeightNums + k] = valTemp;
+			index--;
+		}
+		MatC[length] = pointPair[i].ptDis;
+		length++;
+	}
+
+	switch (m_ContType)
+	{
+	case NOORDER:
+		break;
+	case ZEROORDER:
+		for (i = 1; i < m_iWeightNums; i++)
+		{
+			MatA[length * m_iWeightNums + i - 1] = 1.0; MatA[length * m_iWeightNums + i] = -1.0;
+			length++;
+			contLen++;
+		}
+		MatA[length * m_iWeightNums] = 1.0; MatA[length * m_iWeightNums + m_iWeightNums - 1] = -1.0;
+		length++;
+		contLen++;
+		break;
+	case ONEORDER:
+		for (i = 1; i < m_iWeightNums - 1; i++)
+		{
+			MatA[length *m_iWeightNums + i - 1] = 1.0; MatA[length *m_iWeightNums + i + 1] = 1.0;
+			MatA[length *m_iWeightNums + i] = -2.0;
+			length++;
+			contLen++;
+		}
+		MatA[length *m_iWeightNums + 1] = 1.0; MatA[length *m_iWeightNums + m_iWeightNums - 1] = 1.0;
+		MatA[length *m_iWeightNums] = -2.0;
+		length++;
+		contLen++;
+		MatA[length *m_iWeightNums] = 1.0; MatA[length *m_iWeightNums + m_iWeightNums - 2] = 1.0;
+		MatA[length *m_iWeightNums + m_iWeightNums - 1] = -2.0;
+		length++;
+		contLen++;
+		break;
+	default:
+		break;
+	}
+
+	ErrorRecord = new IMG_LREAL[IteMaxTimes]();
+	MatBRecord = new IMG_LREAL[IteMaxTimes*m_iWeightNums];
+	MatACopy = new IMG_LREAL[m_iWeightNums * length];
+	MatCCopy = new IMG_LREAL[length];
+	memcpy(MatCCopy, MatC, sizeof(double)*length);
+	memcpy(MatACopy, MatA, sizeof(double)*m_iWeightNums * length);
+	Weight = new IMG_LREAL[length];
+
+	if (m_bDebug)
+	{
+		FILE *funfile;
+		char name[256];
+		sprintf(name, "%s\\MatA.txt", debugPath);
+		funfile = fopen(name, "w");
+		for (j = 0; j < length; j++)
+		{
+			for (k = 0; k < m_iWeightNums; k++)
+			{
+				fprintf(funfile, "%12.9e ", MatACopy[j * m_iWeightNums + k]);
+			}
+			fprintf(funfile, "\n");
+		}
+		fclose(funfile);
+	}
+	if (m_bDebug)
+	{
+		FILE *funfile;
+		char name[256];
+		sprintf(name, "%s\\MatB.txt", debugPath);
+		funfile = fopen(name, "w");
+		for (j = 0; j < length; j++)
+		{
+			fprintf(funfile, "%12.9e\n", MatCCopy[j]);
+		}
+		fclose(funfile);
+	}
+
+	LAPACKE_dgels(LAPACK_ROW_MAJOR, 'N', length, m_iWeightNums, 1, MatACopy, m_iWeightNums, MatCCopy, 1);
+	memcpy(MatB, MatCCopy, m_iWeightNums * sizeof(IMG_LREAL));
+	memcpy(MatCCopy, MatC, sizeof(double)*length);
+
+	double mena;
+	while (1)
+	{
+		cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, length, 1, m_iWeightNums, 1, MatA, m_iWeightNums, MatB, 1, -1, MatCCopy, 1);
+		//ErrorRecord[IterTimes * weightNums] = 0;
+		ippsAbs_64f(MatCCopy, MatCCopy, length);
+		ippsMean_64f(MatCCopy, length, &ErrorRecord[IterTimes]);
+		if (IterTimes == 0)
+		{
+			Sigma = ErrorRecord[IterTimes];
+			SigmaCont = 0.5*Sigma;
+			addSigma = 20 * Sigma;
+		}
+		if (m_bDebug)
+		{
+			FILE *funfile;
+			char name[256];
+			sprintf(name, "%s\\AX-B%d.txt", debugPath, IterTimes);
+			funfile = fopen(name, "w");
+			for (int j = 0; j < length; j++)
+			{
+				fprintf(funfile, "%12.9e \n", MatCCopy[j]);
+
+			}
+			fclose(funfile);
+		}
+
+		memcpy(MatBRecord + IterTimes*m_iWeightNums, MatB, m_iWeightNums * sizeof(IMG_LREAL));
+		if ((IterTimes >= 1 && abs(ErrorRecord[IterTimes] - ErrorRecord[(IterTimes - 1)]) <= ItePrecision)
+			|| (IterTimes >= 0 && ErrorRecord[IterTimes] - 0.0f < 1e-7))
+		{
+			break;
+		}
+		if (IterTimes == IteMaxTimes - 1)
+		{
+			double minVal;
+			int minIndex;
+			ippsMinIndx_64f(ErrorRecord, IteMaxTimes, &minVal, &minIndex);
+			memcpy(MatB, MatBRecord + minIndex*m_iWeightNums, m_iWeightNums * sizeof(IMG_LREAL));
+			break;
+		}
+		for (i = 0; i < length - contLen - m_iEdgeCont; i++)
+		{
+			Weight[i] = 1.0 / (1.f + exp(MatCCopy[i] * MatCCopy[i] / (Sigma*Sigma)));
+			ippsMulC_64f(MatA + i*m_iWeightNums, Weight[i], MatACopy + i*m_iWeightNums, m_iWeightNums);
+			MatCCopy[i] = MatC[i] * Weight[i];
+		}
+		for (i = length - contLen - m_iEdgeCont; i < length - contLen; i++)
+		{
+			Weight[i] = 1.0 / (1.f + exp(MatCCopy[i] * MatCCopy[i] / (addSigma*addSigma)));
+			ippsMulC_64f(MatA + i*m_iWeightNums, Weight[i], MatACopy + i*m_iWeightNums, m_iWeightNums);
+			MatCCopy[i] = MatC[i] * Weight[i];
+		}
+		for (i = length - contLen; i < length; i++)
+		{
+			Weight[i] = 1.0 / (1.f + exp(MatCCopy[i] * MatCCopy[i] / (SigmaCont*SigmaCont)));
+			ippsMulC_64f(MatA + i*m_iWeightNums, Weight[i], MatACopy + i*m_iWeightNums, m_iWeightNums);
+			MatCCopy[i] = MatC[i] * Weight[i];
+		}
+
+		LAPACKE_dgels(LAPACK_ROW_MAJOR, 'N', length, m_iWeightNums, 1, MatACopy, m_iWeightNums, MatCCopy, 1);
+		memcpy(MatB, MatCCopy, m_iWeightNums * sizeof(IMG_LREAL));
+		memcpy(MatCCopy, MatC, sizeof(double)*length);
+		IterTimes++;
+	}
+	if (m_bDebug)
+	{
+		FILE *funfile;
+		char name[256];
+		sprintf(name, "%s\\FittingError.txt", debugPath);
+		funfile = fopen(name, "w");
+		fprintf(funfile, "Sigma:%12.9e \n", Sigma);
+		fprintf(funfile, "SigmaCont:%12.9e \n", SigmaCont);
+		fprintf(funfile, "IteMaxTimes:%d \n", IterTimes);
+		fprintf(funfile, "ItePrecision:%12.9e \n", ItePrecision);
+		fprintf(funfile, "ptLen:%d \n", length - contLen);
+		fprintf(funfile, "contLen:%d \n", contLen);
+		fprintf(funfile, "Error: \n");
+		for (int j = 0; j <= IterTimes; j++)
+		{
+			fprintf(funfile, "%12.9e \n", ErrorRecord[j]);
+
+		}
+		fclose(funfile);
+	}
+
+	for (i = 0; i < m_iWeightNums; i++)
+	{
+		pWeight[i] = (IMG_REAL)MatB[i];
+	}
+
+	if (m_bDebug)
+	{
+		FILE *funfile;
+		char name[256];
+		sprintf(name, "%s\\MatRes.txt", debugPath);
+		funfile = fopen(name, "w");
+		for (j = 0; j < m_iWeightNums; j++)
+		{
+			fprintf(funfile, "%12.9e \n", pWeight[j]);
+
+		}
+		fclose(funfile);
+	}
+
+	if (MatA)
+	{
+		delete[]MatA;
+		MatA = nullptr;
+	}
+	if (MatB)
+	{
+		delete[]MatB;
+		MatB = nullptr;
+	}
+	if (MatC)
+	{
+		delete[]MatC;
+		MatC = nullptr;
+	}
+	if (MatACopy)
+	{
+		delete[]MatACopy;
+		MatACopy = nullptr;
+	}
+	if (ErrorRecord)
+	{
+		delete[]ErrorRecord;
+		ErrorRecord = nullptr;
+	}
+	if (MatCCopy)
+	{
+		delete[]MatCCopy;
+		MatCCopy = nullptr;
+	}
+	if (Weight)
+	{
+		delete[]Weight;
+		Weight = nullptr;
+	}
+	if (MatBRecord)
+	{
+		delete[]MatBRecord;
+		MatBRecord = nullptr;
+	}
+	return 0;
+}
+bool CVisCurveFitting::LineCrossLine(IMG_RCOORD line1Start, IMG_RCOORD line1End, IMG_RCOORD line2Start, IMG_RCOORD line2End, IMG_RCOORD &dst)
+{
+	IMG_LREAL angle1, angle2;
+	IMG_LREAL line1Slope, line2Slope, line1b, line2b;
+	angle1 = atan2(line1End.y - line1Start.y, line1End.x - line1Start.x);
+	angle2 = atan2(line2End.y - line2Start.y, line2End.x - line2Start.x);
+	angle1 *= r2d; angle2 *= r2d;
+	if (fabs(angle1 - angle2) < 1.5 || (fabs(angle1 - angle2) > 178.5&&fabs(angle1 - angle2) < 181.5))
+	{
+		return false;
+	}
+	if (fabs(fabs(angle1) - 90) < 5 && !(fabs(fabs(angle2) - 90) < 5))
+	{
+		line1Slope = (line1End.x - line1Start.x) / (line1End.y - line1Start.y);
+		line1b = line1End.x - line1Slope*line1End.y;
+		line2Slope = (line2End.y - line2Start.y) / (line2End.x - line2Start.x);
+		line2b = line2End.y - line2Slope*line2End.x;
+		dst.y = (IMG_REAL)((line2Slope*line1b + line2b) / (1.0 - line1Slope*line2Slope));
+		dst.x = (IMG_REAL)(dst.y*line1Slope + line1b);
+		return true;
+	}
+	else if (!(fabs(fabs(angle1) - 90) < 5) && (fabs(fabs(angle2) - 90) < 5))
+	{
+		line2Slope = (line2End.x - line2Start.x) / (line2End.y - line2Start.y);
+		line2b = line2End.x - line2Slope*line2End.y;
+		line1Slope = (line1End.y - line1Start.y) / (line1End.x - line1Start.x);
+		line1b = line1End.y - line1Slope*line1End.x;
+		dst.y = (IMG_REAL)((line1Slope*line2b + line1b) / (1.0 - line1Slope*line2Slope));
+		dst.x = (IMG_REAL)(dst.y*line2Slope + line2b);
+		return true;
+	}
+	else
+	{
+		line2Slope = (line2End.y - line2Start.y) / (line2End.x - line2Start.x);
+		line2b = line2End.y - line2Slope*line2End.x;
+		line1Slope = (line1End.y - line1Start.y) / (line1End.x - line1Start.x);
+		line1b = line1End.y - line1Slope*line1End.x;
+		dst.x = (IMG_REAL)((line2b - line1b) / (line1Slope - line2Slope));
+		dst.y = (IMG_REAL)(line1Slope*dst.x + line1b);
+		return true;
+	}
+}
+
+bool CVisCurveFitting::PointInLine(IMG_RCOORD lineStart, IMG_RCOORD lineEnd, IMG_RCOORD pt)
+{
+	IMG_RCOORD vec1 = { pt.x - lineStart.x, pt.y - lineStart.y };
+	IMG_RCOORD vec2 = { pt.x - lineEnd.x, pt.y - lineEnd.y };
+	if (vec1.x*vec2.x + vec1.y*vec2.y <= 0)
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+IMG_INT CVisCurveFitting::AddEdgeControlPts(const IMG_RCOORD *coor, const IMG_INT &nums)
+{
+	int i, j;
+	IMG_LREAL tPara, xInte_curve, xInte_edge, dist_left, dist_right, dist;
+	IMG_LRCOORD tempCoor1, tempCoor2, currentPt;
+	IMG_INT regCurve, regEdge;
+	PARA_POINT startPt, endPt, leftPt, rightPt;
+	vector<VIS_POINT_PAIR>dstPoints; VIS_POINT_PAIR tempPt;
+	xInte_curve = (m_rNode[m_iNodeNums - 1] - m_rNode[0]) / (m_iNodeNums - 1 - 2 * m_iDims);
+	IMG_INT curveEquPara;
+	curveEquPara = m_iDims + 1;
+	IMG_LREAL angle, angle1, deriValx, deriValy;
+	//IMG_LREAL line_angle, line_a, line_b, line_c, powAdd;
+	tPara = 0.00001;
+	regCurve = floor((tPara - m_rNode[0]) / xInte_curve);
+	tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+	for (j = 0; j < curveEquPara; j++)
+	{
+		tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+	}
+	startPt.pt = tempCoor1;
+	startPt.para = tPara;
+	tPara = 0.99999;
+	regCurve = floor((tPara - m_rNode[0]) / xInte_curve);
+	tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+	for (j = 0; j < curveEquPara; j++)
+	{
+		tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+	}
+	endPt.pt = tempCoor1;
+	endPt.para = tPara;
+
+	for (i = 0; i < nums; i++)
+	{
+		currentPt.x = (double)coor[i].x; currentPt.y = (double)coor[i].y;
+		dist_left = Pt2PtDis(currentPt, startPt.pt); dist_right = Pt2PtDis(currentPt, endPt.pt);
+		leftPt = startPt; rightPt = endPt;
+		tempPt.edgePt = currentPt;
+		while (1)
+		{
+			if (fabs(dist_left - dist_right) < 1e-5&&fabs(leftPt.para - rightPt.para) < 1e-2)
+			{
+				deriValx = deriValy = 0.f;
+				for (j = 0; j < curveEquPara; j++)
+				{
+					deriValx += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((tempPt.coeffVal), j);
+					deriValy += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((tempPt.coeffVal), j);
+				}
+				angle = atan2(deriValy, deriValx);
+				angle *= r2d;
+				if (angle < 0) { angle += 360; };
+				angle -= 90;
+				if (angle < 0) { angle += 360; };
+				angle1 = atan2(tempPt.edgePt.y - tempPt.curvePt.y, tempPt.edgePt.x - tempPt.curvePt.x);
+				angle1 *= r2d;
+				if (angle1 < 0) { angle1 += 360; };
+				if (fabs(angle - angle1) > 90)
+				{
+					tempPt.ptDis = -Pt2PtDis(tempPt.curvePt, tempPt.edgePt);
+				}
+				else
+				{
+					tempPt.ptDis = Pt2PtDis(tempPt.curvePt, tempPt.edgePt);
+				}
+				dstPoints.push_back(tempPt);
+				break;
+			}
+			tempPt.coeffVal = (leftPt.para + rightPt.para) / 2.0;
+			regCurve = floor((tempPt.coeffVal - m_rNode[0]) / xInte_curve);
+			tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+			for (j = 0; j < curveEquPara; j++)
+			{
+				tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tempPt.coeffVal), j);
+				tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tempPt.coeffVal), j);
+			}
+			tempPt.curvePt = tempCoor1;
+			dist_left = Pt2PtDis(currentPt, leftPt.pt); dist_right = Pt2PtDis(currentPt, rightPt.pt);
+			if (dist_left < dist_right)
+			{
+				rightPt.pt = tempPt.curvePt; rightPt.para = tempPt.coeffVal;
+			}
+			else
+			{
+				leftPt.pt = tempPt.curvePt; leftPt.para = tempPt.coeffVal;
+			}
+		}
+	}
+	
+	for (i = 0; i < nums; i++)
+	{
+		m_ptPair[m_ptPairNums - nums + i] = dstPoints[i];
+	}
+	dstPoints.clear();
+
+	return 0;
+}
+
+double CVisCurveFitting::Pt2PtDis(const IMG_LRCOORD &pt1, const IMG_LRCOORD &pt2)
+{
+	return pow(pow(pt1.x - pt2.x, 2) + pow(pt1.y - pt2.y, 2), 0.5);
+}
+
+void CVisCurveFitting::clear()
+{
+	/*if (m_bDebug)
+	{
+		char name[256];
+		m_clock.Click("finish all");
+	}*/
+	if (m_coorInput)
+	{
+		delete[]m_coorInput;
+		m_coorInput = nullptr;
+	}
+	if (m_rNode)
+	{
+		delete[]m_rNode;
+		m_rNode = nullptr;
+	}
+	/*for (int i = 0; i < m_iDims+1; i++)
+	{
+	if (m_NodeFun[i])
+	{
+	delete[] m_NodeFun[i];
+	m_NodeFun[i] = nullptr;
+	}
+	}
+	if (m_NodeFun)
+	{
+	delete[]m_NodeFun;
+	m_NodeFun = nullptr;
+	}*/
+	if (m_paraEqu)
+	{
+		delete[]m_paraEqu;
+		m_paraEqu = nullptr;
+	}
+	if (m_deriEqu)
+	{
+		delete[]m_deriEqu;
+		m_deriEqu = nullptr;
+	}
+	/*if (m_pCoorWeight)
+	{
+		delete[]m_pCoorWeight;
+		m_pCoorWeight = nullptr;
+	}
+	if (m_paraEqu_deno)
+	{
+		delete[]m_paraEqu_deno;
+		m_paraEqu_deno = nullptr;
+	}*/
+	if (m_ptPair)
+	{
+		delete[]m_ptPair;
+		m_ptPair = nullptr;
+	}
+	if (rFittingNode)
+	{
+		delete[]rFittingNode;
+		rFittingNode = nullptr;
+	}
+	if (pWeight)
+	{
+		delete[]pWeight;
+		pWeight = nullptr;
+	}
+	if (m_pDisEqu)
+	{
+		delete[]m_pDisEqu;
+		m_pDisEqu = nullptr;
+	}
+	if (m_NodeFun)
+	{
+		delete[]m_NodeFun;
+		m_NodeFun = nullptr;
+	}
+	if (m_ClosedBaseFun)
+	{
+		delete[]m_ClosedBaseFun;
+		m_ClosedBaseFun = nullptr;
+	}
+	/*if (m_bDebug)
+	{
+		char name[256];
+		m_clock.Click("delete all");
+		sprintf(name, "%s\\clock.log", debugPath);
+		m_clock.SetPath(name);
+		m_clock.SaveToFile();
+	}*/
+}
+
+IMG_VVOID CVisCurveFitting::GetCurveCorssLine(IMG_INT Sample, IMG_RCOORD startPt, IMG_RCOORD endPt, PARA_POINT *&coor, IMG_INT &nums)
+{
+	int/* sample = 100,*/ VecNums;
+	int i, j, k, m;
+	if (m_iDisEquNums == 0 || !m_pDisEqu)
+	{
+		nums = 0;
+		return;
+	}
+	vector<PARA_POINT>vecCoor, resCoor; PARA_POINT dstParaPt;
+	IMG_LRCOORD tempCoor1, tempCoor2, deriVal;
+	IMG_LREAL step = 1.0 / (double)Sample;
+	//IMG_LREAL step = (IMG_LREAL)m_iDisEquNums / (IMG_LREAL)Sample;
+	IMG_LREAL tPara, dis, xInte_curve, xInte_edge, angle;
+	IMG_INT regCurve, regEdge;
+	xInte_edge = (rFittingNode[m_iFittingNodeNums - 1] - rFittingNode[0]) / (m_iFittingNodeNums - 1 - 2 * m_iDims);
+	xInte_curve = (m_rNode[m_iNodeNums - 1] - m_rNode[0]) / (m_iNodeNums - 1 - 2 * m_iDims);
+	IMG_INT curveEquPara, edgeEquPara;
+	curveEquPara = edgeEquPara = m_iDims + 1;
+	//IMG_REAL *baseVal = new IMG_REAL[m_iWeightNums];
+	//IMG_RCOORD regionPt_start, regionPt_end, vectorRegion, edgePt;
+	IMG_LREAL line_angle, line_a, line_b, line_c, powAdd;
+	tPara = 0.00001;
+	regCurve = floor((tPara - m_rNode[0]) / xInte_curve);
+	regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+	tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+	deriVal.x = 0.f; deriVal.y = 0.f;
+	dis = 0.f;
+	for (j = 0; j < curveEquPara; j++)
+	{
+		tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+	}
+	angle = atan2(deriVal.y, deriVal.x);
+	angle *= r2d;
+	if (angle < 0) { angle += 360; };
+	angle -= 90;
+	if (angle < 0) { angle += 360; };
+	//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+	dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+	dstParaPt.para = tPara;
+	vecCoor.push_back(dstParaPt);
+
+	for (i = 1; i < Sample; i++)
+	{
+		tPara = i*step;
+		regCurve = floor((tPara - m_rNode[0]) / xInte_curve);
+		regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+		tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+		deriVal.x = 0.f; deriVal.y = 0.f;
+		dis = 0.f;
+		for (j = 0; j < curveEquPara; j++)
+		{
+			tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		}
+		//memset(baseVal, 0, sizeof(IMG_REAL)*m_iWeightNums);
+
+		angle = atan2(deriVal.y, deriVal.x);
+		angle *= r2d;
+		if (angle < 0) { angle += 360; };
+		angle -= 90;
+		if (angle < 0) { angle += 360; };
+		//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+		dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+		dstParaPt.para = tPara;
+		vecCoor.push_back(dstParaPt);
+	}
+	tPara = 0.99999;
+	//tPara = m_iDisEquNums - 0.00001;
+	regCurve = floor((tPara - m_rNode[0]) / xInte_curve);
+	regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+	tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+	deriVal.x = 0.f; deriVal.y = 0.f;
+	dis = 0.f;
+	for (j = 0; j < curveEquPara; j++)
+	{
+		tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+	}
+	angle = atan2(deriVal.y, deriVal.x);
+	angle *= r2d;
+	if (angle < 0) { angle += 360; };
+	angle -= 90;
+	if (angle < 0) { angle += 360; };
+	//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+	dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+	dstParaPt.para = tPara;
+	vecCoor.push_back(dstParaPt);
+
+	VecNums = vecCoor.size();
+	IMG_LREAL *dis2line = new IMG_LREAL[VecNums]();
+	line_angle = atan2(endPt.y - startPt.y, endPt.x - startPt.x);
+	line_a = sin(line_angle);
+	line_b = -cos(line_angle);
+	line_c = -(endPt.x * line_a + endPt.y * line_b);
+	powAdd = pow(line_a * line_a + line_b * line_b, 0.5);
+	for (i = 0; i < VecNums; i++)
+	{
+		dis2line[i] = (line_a * vecCoor[i].pt.x + line_b*vecCoor[i].pt.y + line_c) / powAdd;
+	}
+	PARA_POINT leftPt, rightPt;
+	IMG_LREAL dist_left, dist_right;
+	for (i = 0; i < VecNums - 1; i++)
+	{
+		if (dis2line[i] * dis2line[i + 1] < 0)
+		{
+			leftPt = vecCoor[i]; rightPt = vecCoor[i + 1];
+			dist_left = dis2line[i]; dist_right = dis2line[i + 1];
+			while (1)
+			{
+				tPara = (leftPt.para + rightPt.para) / 2.f;
+				regCurve = floor((tPara - m_rNode[0]) / xInte_curve);
+				regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+				tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+				deriVal.x = 0.f; deriVal.y = 0.f;
+				dis = 0.f;
+				for (j = 0; j < curveEquPara; j++)
+				{
+					tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+					tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+					deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+					deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+					dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+				}
+				//memset(baseVal, 0, sizeof(IMG_REAL)*m_iWeightNums);
+
+				angle = atan2(deriVal.y, deriVal.x);
+				angle *= r2d;
+				if (angle < 0) { angle += 360; };
+				angle -= 90;
+				if (angle < 0) { angle += 360; };
+				//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+				dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+				dstParaPt.para = tPara;
+				dis = (line_a * dstParaPt.pt.x + line_b*dstParaPt.pt.y + line_c) / powAdd;
+				if (fabs(dis)< 0.01)
+				{
+					resCoor.push_back(dstParaPt);
+					break;
+				}
+				else
+				{
+					if (dis*dist_left < 0)
+					{
+						rightPt = dstParaPt;
+					}
+					else
+					{
+						leftPt = dstParaPt;
+					}
+				}
+			}
+		}
+	}
+
+	nums = resCoor.size();
+	if (nums < 0)
+	{
+		if (dis2line)
+		{
+			delete[]dis2line;
+			dis2line = nullptr;
+		}
+		return;
+	}
+	coor = new PARA_POINT[nums];
+	for (int i = 0; i < nums; i++)
+	{
+		coor[i] = resCoor[i];
+	}
+
+	if (dis2line)
+	{
+		delete[]dis2line;
+		dis2line = nullptr;
+	}
+	resCoor.clear();
+	vecCoor.clear();
+}
+
+IMG_VVOID CVisCurveFitting::GetCurveCorssCircle(IMG_INT Sample, IMG_CIRCLE circle, PARA_POINT *&coor, IMG_INT &nums)
+{
+	if (m_iDisEquNums == 0 || !m_pDisEqu)
+	{
+		nums = 0;
+		return;
+	}
+	int /*sample = 100, */VecNums;
+	int i, j, k, m;
+	vector<PARA_POINT>vecCoor, resCoor; PARA_POINT dstParaPt;
+	IMG_LRCOORD tempCoor1, tempCoor2, deriVal;
+	IMG_LREAL step = 1.0 / (double)Sample;
+	//IMG_LREAL step = (IMG_LREAL)m_iDisEquNums / (IMG_LREAL)Sample;
+	IMG_LREAL tPara, dis, xInte_curve, xInte_edge, angle;
+	IMG_INT regCurve, regEdge;
+	xInte_edge = (rFittingNode[m_iFittingNodeNums - 1] - rFittingNode[0]) / (m_iFittingNodeNums - 1 - 2 * m_iDims);
+	xInte_curve = (m_rNode[m_iNodeNums - 1] - m_rNode[0]) / (m_iNodeNums - 1 - 2 * m_iDims);
+	IMG_INT curveEquPara, edgeEquPara;
+	curveEquPara = edgeEquPara = m_iDims + 1;
+	//IMG_REAL *baseVal = new IMG_REAL[m_iWeightNums];
+	//IMG_RCOORD regionPt_start, regionPt_end, vectorRegion, edgePt;
+	//IMG_REAL line_angle, line_a, line_b, line_c, powAdd;
+	tPara = 0.00001;
+	regCurve = floor((tPara - m_rNode[0]) / xInte_curve);
+	regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+	tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+	deriVal.x = 0.f; deriVal.y = 0.f;
+	dis = 0.f;
+	for (j = 0; j < curveEquPara; j++)
+	{
+		tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+	}
+	angle = atan2(deriVal.y, deriVal.x);
+	angle *= r2d;
+	if (angle < 0) { angle += 360; };
+	angle -= 90;
+	if (angle < 0) { angle += 360; };
+	//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+	dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+	dstParaPt.para = tPara;
+	vecCoor.push_back(dstParaPt);
+	for (i = 1; i < Sample; i++)
+	{
+		tPara = i*step;
+		regCurve = floor((tPara - m_rNode[0]) / xInte_curve);
+		regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+		tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+		deriVal.x = 0.f; deriVal.y = 0.f;
+		dis = 0.f;
+		for (j = 0; j < curveEquPara; j++)
+		{
+			tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		}
+		//memset(baseVal, 0, sizeof(IMG_REAL)*m_iWeightNums);
+
+		angle = atan2(deriVal.y, deriVal.x);
+		angle *= r2d;
+		if (angle < 0) { angle += 360; };
+		angle -= 90;
+		if (angle < 0) { angle += 360; };
+		//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+		dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+		dstParaPt.para = tPara;
+		vecCoor.push_back(dstParaPt);
+	}
+	tPara = 0.99999;
+	//tPara = m_iDisEquNums - 0.00001;
+	regCurve = floor((tPara - m_rNode[0]) / xInte_curve);
+	regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+	tempCoor1.x = 0.0; tempCoor1.y = 0.0;
+	deriVal.x = 0.f; deriVal.y = 0.f;
+	dis = 0.f;
+	for (j = 0; j < curveEquPara; j++)
+	{
+		tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+	}
+	angle = atan2(deriVal.y, deriVal.x);
+	angle *= r2d;
+	if (angle < 0) { angle += 360; };
+	angle -= 90;
+	if (angle < 0) { angle += 360; };
+	//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+	dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+	dstParaPt.para = tPara;
+	vecCoor.push_back(dstParaPt);
+
+	VecNums = vecCoor.size();
+	IMG_LREAL *dis2cent = new IMG_LREAL[VecNums]();
+	
+	for (i = 0; i < VecNums; i++)
+	{
+		dis2cent[i] = pow(pow(circle.center.x - vecCoor[i].pt.x, 2) + pow(circle.center.y - vecCoor[i].pt.y, 2), 0.5);
+	}
+	PARA_POINT leftPt, rightPt;
+	IMG_LREAL dist_left, dist_right;
+	for (i = 0; i < VecNums - 1; i++)
+	{
+		if ((dis2cent[i] - circle.radius) * (dis2cent[i + 1] - circle.radius)  < 0)
+		{
+			leftPt = vecCoor[i]; rightPt = vecCoor[i + 1];
+			dist_left = dis2cent[i]; dist_right = dis2cent[i + 1];
+			while (1)
+			{
+				tPara = (leftPt.para + rightPt.para) / 2.f;
+				regCurve = floor((tPara - m_rNode[0]) / xInte_curve);
+				regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+				tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+				deriVal.x = 0.f; deriVal.y = 0.f;
+				dis = 0.f;
+				for (j = 0; j < curveEquPara; j++)
+				{
+					tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+					tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+					deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+					deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+					dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+				}
+
+				angle = atan2(deriVal.y, deriVal.x);
+				angle *= r2d;
+				if (angle < 0) { angle += 360; };
+				angle -= 90;
+				if (angle < 0) { angle += 360; };
+				//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+				dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+				dstParaPt.para = tPara;
+				dis = pow(pow(circle.center.x - dstParaPt.pt.x, 2) + pow(circle.center.y - dstParaPt.pt.y, 2), 0.5);
+				if (fabs(dis - circle.radius)< 0.01)
+				{
+					resCoor.push_back(dstParaPt);
+					break;
+				}
+				else
+				{
+					if ((dis - circle.radius) * (dist_left - circle.radius)< 0)
+					{
+						rightPt = dstParaPt;
+					}
+					else
+					{
+						leftPt = dstParaPt;
+					}
+				}
+			}
+		}
+	}
+
+	nums = resCoor.size();
+	if (nums < 0)
+	{
+		return;
+	}
+	coor = new PARA_POINT[nums];
+	for (int i = 0; i < nums; i++)
+	{
+		coor[i] = resCoor[i];
+	}
+
+	if (dis2cent)
+	{
+		delete[]dis2cent;
+		dis2cent = nullptr;
+	}
+	resCoor.clear();
+	vecCoor.clear();
+}
+
+IMG_VVOID CVisCurveFitting::GetCurveLength(PARA_POINT pt1, PARA_POINT pt2, IMG_INT regionSample, IMG_REAL &length)
+{
+	if (m_iDisEquNums == 0 || !m_pDisEqu)
+	{
+		length = 0.f;
+		return;
+	}
+	IMG_REAL para1 = pt1.para; IMG_REAL para2 = pt2.para;
+	int i, j, k, m;
+	PARA_POINT dstParaPt, beforePt;
+	beforePt = pt1;
+	length = 0.f;
+	IMG_RCOORD tempCoor1, tempCoor2, deriVal;
+	IMG_LREAL step = (para2 - para1) / (IMG_LREAL)regionSample;
+	IMG_LREAL tPara, dis, len, xInte_curve, xInte_edge, angle;
+	IMG_INT regCurve, regEdge;
+	xInte_edge = (rFittingNode[m_iFittingNodeNums - 1] - rFittingNode[0]) / (m_iFittingNodeNums - 1 - 2 * m_iDims);
+	xInte_curve = (m_rNode[m_iNodeNums - 1] - m_rNode[0]) / (m_iNodeNums - 1 - 2 * m_iDims);
+	IMG_INT curveEquPara, edgeEquPara;
+	curveEquPara = edgeEquPara = m_iDims + 1;
+
+	regCurve = floor((para1 - m_rNode[0]) / xInte_curve);
+	regEdge = floor((para1 - rFittingNode[0]) / xInte_edge);
+	tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+	deriVal.x = 0.f; deriVal.y = 0.f;
+	dis = 0.f;
+	for (j = 0; j < curveEquPara; j++)
+	{
+		tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(para1), j);
+		tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(para1), j);
+		deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(para1), j);
+		deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(para1), j);
+		dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(para1), j);
+	}
+	angle = atan2(deriVal.y, deriVal.x);
+	angle *= r2d;
+	if (angle < 0) { angle += 360; };
+	angle -= 90;
+	if (angle < 0) { angle += 360; };
+	//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+	dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+	if (fabs(dstParaPt.pt.x - pt1.pt.x) >= 1 || fabs(dstParaPt.pt.y - pt1.pt.y) >= 1)
+	{
+		length = 0.f;
+		return;
+	}
+
+	regCurve = floor((para2 - m_rNode[0]) / xInte_curve);
+	regEdge = floor((para2 - rFittingNode[0]) / xInte_edge);
+	tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+	deriVal.x = 0.f; deriVal.y = 0.f;
+	dis = 0.f;
+	for (j = 0; j < curveEquPara; j++)
+	{
+		tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(para2), j);
+		tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(para2), j);
+		deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(para2), j);
+		deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(para2), j);
+		dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(para2), j);
+	}
+	angle = atan2(deriVal.y, deriVal.x);
+	angle *= r2d;
+	if (angle < 0) { angle += 360; };
+	angle -= 90;
+	if (angle < 0) { angle += 360; };
+	//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+	dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+	if (fabs(dstParaPt.pt.x - pt2.pt.x) >= 1 || fabs(dstParaPt.pt.y - pt2.pt.y) >= 1)
+	{
+		length = 0.f;
+		return;
+	}
+
+	for (i = 1; i < regionSample + 1; i++)
+	{
+		
+		tPara = i*step + para1;
+		regCurve = floor((tPara - m_rNode[0]) / xInte_curve);
+		regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+		tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+		deriVal.x = 0.f; deriVal.y = 0.f;
+		dis = 0.f;
+		for (j = 0; j < curveEquPara; j++)
+		{
+			tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		}
+
+		angle = atan2(deriVal.y, deriVal.x);
+		angle *= r2d;
+		if (angle < 0) { angle += 360; };
+		angle -= 90;
+		if (angle < 0) { angle += 360; };
+		//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+		dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+		dstParaPt.para = tPara;
+		len = pow(pow(beforePt.pt.x - dstParaPt.pt.x, 2) + pow(beforePt.pt.y - dstParaPt.pt.y, 2), 0.5);
+		length += len;
+		beforePt = dstParaPt;
+	}
+}
+
+VIS_POINT_PAIR CVisCurveFitting::GetBaseCurveNearest(VIS_POINT_PAIR *pointPair, IMG_INT ptPairNums)
+{
+	if (ptPairNums == 1)return pointPair[0];
+	float *pDis = new float[ptPairNums];
+	for (int i = 0; i < ptPairNums; i++)
+	{
+		pDis[i] = sqrt((pointPair[i].curvePt.x - pointPair[i].edgePt.x)*(pointPair[i].curvePt.x - pointPair[i].edgePt.x) +
+			(pointPair[i].curvePt.y - pointPair[i].edgePt.y)*(pointPair[i].curvePt.y - pointPair[i].edgePt.y));
+	}
+	float minDis = 0.f;
+	int index = 0;
+	ippsMinIndx_32f(pDis, ptPairNums, &minDis, &index);
+	delete[]pDis;
+	return pointPair[index];
+}
+
+bool CVisCurveFitting::ptOnLine(VIS_POINT_PAIR linePt1, VIS_POINT_PAIR linePt2, VIS_POINT_PAIR *pointPair,
+	IMG_INT &ptPairNums, VIS_POINT_PAIR &dstPt)
+{
+	double a, b, c;
+	double Angle = atan2(linePt1.edgePt.y - linePt2.edgePt.y, linePt1.edgePt.x - linePt2.edgePt.x);
+	a = sin(Angle);
+	b = -cos(Angle);
+	c = -(linePt1.edgePt.x * a + linePt1.edgePt.y * b);
+	float *pDis = new float[ptPairNums];
+	for (int i = 0; i < ptPairNums; i++)
+	{
+		pDis[i] = fabs(a*pointPair[i].edgePt.x + b*pointPair[i].edgePt.y + c);
+	}
+	float minDis = 0.f;
+	int index = 0;
+	ippsMinIndx_32f(pDis, ptPairNums, &minDis, &index);
+	if (pDis[index] < 4)
+	{
+		dstPt = pointPair[index];
+		delete[]pDis;
+		return true;
+	}
+	dstPt = pointPair[index];
+	delete[]pDis;
+	return false;
+}
+
+IMG_INT CVisCurveFitting::PointPairFilter(VIS_POINT_PAIR *pointPair, IMG_INT &ptPairNums)
+{
+	int i, j, k;
+	int ptNums = ptPairNums;
+	if (ptPairNums < 15)return -1;
+	VIS_POINT_PAIR firstPt, secondPt, searPt, tempPt;
+	vector<VIS_POINT_PAIR>dstPair;
+	VIS_POINT_PAIR *copyPair = new VIS_POINT_PAIR[ptPairNums];
+
+	int step = 0;
+	int searchStep = 0;
+	int tempNums;
+	int index = 0, startIndex = 0;
+	int serialSearNums = 0;
+	int maxSerial = 20;
+	int regionNum = 15;
+	int delNums = 0;
+	bool mark = true;
+	//首先计算首尾两端10个扫描长度的系数
+	IMG_LREAL startPara1, startPara10;
+	IMG_LREAL endPara1, endPara10;
+	startPara1 = pointPair[0].coeffVal;
+	for (i = 0; i < ptNums; i += step)
+	{
+		tempNums = pointPair[i].searchNums;
+		step += tempNums;
+		index++;
+		if (index >= regionNum)
+		{
+			break;
+		}
+	}
+	startPara10 = pointPair[index].coeffVal;
+	endPara10 = pointPair[ptPairNums - 1].coeffVal;
+	step = 0; index = 0;
+	for (i = ptPairNums - 1; i >= 0; i -= step)
+	{
+		tempNums = pointPair[i].searchNums;
+		step += tempNums;
+		index++;
+		if (index >= regionNum)
+		{
+			break;
+		}
+	}
+	endPara1 = pointPair[ptPairNums - 1 - index].coeffVal;
+	startPara1 = 0.0; startPara10 = 0.1;
+	endPara1 = 0.9; endPara10 = 1;
+	step = 0;
+	for (i = 0; i < ptNums; i += step)
+	{
+		if (dstPair.size() > 0 && dstPair[(int)dstPair.size() - 1].coeffVal > endPara1)
+		{
+			break;
+		}
+		dstPair.clear();
+		serialSearNums = 0;
+		step = 0;
+		tempNums = pointPair[i].searchNums;
+		firstPt = GetBaseCurveNearest(pointPair + i + step, tempNums);
+		startIndex = i;
+		step += tempNums;
+		if (i + step >= ptPairNums)
+		{
+			delete[]copyPair;
+			copyPair = nullptr;
+			return -5;
+		}
+		tempNums = pointPair[i + step].searchNums;
+		secondPt = GetBaseCurveNearest(pointPair + i + step, tempNums);
+		step += tempNums;
+		dstPair.push_back(firstPt); dstPair.push_back(secondPt);
+		delNums = 0;
+		for (j = i + step; j < ptNums; j += searchStep)
+		{
+			if (serialSearNums > maxSerial)    ///边缘连续性如果大于10，则认为没有连接的边缘
+			{
+				step -= delNums;
+				break;
+			}
+			searchStep = 0;
+			tempNums = pointPair[j].searchNums;
+			mark = ptOnLine(firstPt, secondPt, pointPair+j, tempNums, searPt);
+			
+			searchStep += tempNums;
+			if (mark)
+			{
+				step += tempNums;
+				firstPt = secondPt;
+				secondPt = searPt;
+				dstPair.push_back(searPt);
+				serialSearNums = 0;
+				delNums = 0;
+			}
+			else
+			{
+				delNums += tempNums;
+				step += tempNums;
+				serialSearNums++;
+			}
+		}
+	}
+	if (dstPair.size() < 1)
+	{
+		delete[]copyPair;
+		copyPair = nullptr;
+		ptPairNums = 0;
+		return -2;
+	}
+	double startD = dstPair[0].coeffVal;
+	if (dstPair[(int)dstPair.size() - 1].coeffVal > endPara1)
+	{
+		step = 0;
+		serialSearNums = 0;
+		firstPt = dstPair[0]; secondPt = dstPair[1];
+		for (i = startIndex - 1; i >= 0; i -= (step))
+		{
+			step = 0;
+			if (serialSearNums > maxSerial)    ///边缘连续性如果大于10，则认为没有连接的边缘
+			{
+				break;
+			}
+			tempNums = pointPair[i].searchNums;
+			if (i - tempNums + 1 < 0)
+			{
+				break;
+			}
+			mark = ptOnLine(firstPt, secondPt, pointPair + i - tempNums + 1, tempNums, searPt);
+			step += tempNums;
+			if (mark)
+			{
+				secondPt = firstPt;
+				firstPt = searPt;
+				dstPair.push_back(searPt);
+				startD = dstPair[(int)dstPair.size() - 1].coeffVal;
+			}
+			else
+			{
+				serialSearNums++;
+			}
+		}
+	}
+	else
+	{
+		dstPair.clear();
+		delete[]copyPair;
+		copyPair = nullptr;
+		ptPairNums = 0;
+		return -30;
+	}
+	if (startD > startPara10)
+	{
+		dstPair.clear();
+		step = 0;
+		for (i = 0; i < ptNums; i++)
+		{
+			tempPt = pointPair[i];
+			copyPair[ptNums - i - 1] = tempPt;
+		}
+		for (i = 0; i < ptNums; i += step)
+		{
+			if (dstPair.size() > 0 && dstPair[(int)dstPair.size() - 1].coeffVal < startPara10)
+			{
+				break;
+			}
+			dstPair.clear();
+			serialSearNums = 0;
+			step = 0;
+			tempNums = copyPair[i].searchNums;
+			firstPt = GetBaseCurveNearest(copyPair + i + step, tempNums);
+			startIndex = i;
+			step += tempNums;
+			if (i + step >= ptPairNums)
+			{
+				delete[]copyPair;
+				copyPair = nullptr;
+				return -5;
+			}
+			tempNums = copyPair[i + step].searchNums;
+			secondPt = GetBaseCurveNearest(copyPair + i + step, tempNums);
+			step += tempNums;
+			dstPair.push_back(firstPt); dstPair.push_back(secondPt);
+			delNums = 0;
+			for (j = i + step; j < ptNums; j += searchStep)
+			{
+				if (serialSearNums > maxSerial)    ///边缘连续性如果大于10，则认为没有连接的边缘
+				{
+					step -= delNums;
+					break;
+				}
+				searchStep = 0;
+				tempNums = copyPair[j].searchNums;
+				mark = ptOnLine(firstPt, secondPt, copyPair +j, tempNums, searPt);
+			
+				searchStep += tempNums;
+				if (mark)
+				{
+					step += tempNums;
+					firstPt = secondPt;
+					secondPt = searPt;
+					dstPair.push_back(searPt);
+					serialSearNums = 0;
+					delNums = 0;
+				}
+				else
+				{
+					delNums += tempNums;
+					step += tempNums;
+					serialSearNums++;
+				}
+			}
+		}
+		if (dstPair.size() < 1)
+		{
+			delete[]copyPair;
+			copyPair = nullptr;
+			ptPairNums = 0;
+			return -20;
+		}
+		if (dstPair[(int)dstPair.size() - 1].coeffVal > startPara10)
+		{
+			dstPair.clear();
+			delete[]copyPair;
+			copyPair = nullptr;
+			ptPairNums = 0;
+			return -40;
+		}
+		//return -4;
+	}
+
+	ptPairNums = dstPair.size();
+	for (i = 0; i < ptPairNums; i++)
+	{
+		pointPair[i] = dstPair[i];
+	}
+	//if (dstPair[0].coeffVal > startPara1&&dstPair[0].coeffVal < startPara10)
+	//{
+
+	//}
+	delete[]copyPair;
+	copyPair = nullptr;
+	return 0;
+}
+
+IMG_VVOID CVisCurveFitting::GetClosedCurveEdge(IMG_INT regionSample, PARA_POINT *&coor, IMG_INT &nums, IMG_REAL &length)
+{
+	if (m_iWeightNums == 0 || !pWeight)
+	{
+		nums = 0;
+		return;
+	}
+	length = 0.f;
+	int i, j, k, m;
+	vector<PARA_POINT>vecCoor; PARA_POINT dstParaPt;
+	IMG_LRCOORD tempCoor1, tempCoor2, deriVal;
+	IMG_LREAL step = (double)(rFittingNode[m_iFittingNodeNums - 1] - rFittingNode[0]) / (double)regionSample;
+	//IMG_LREAL step = (IMG_REAL)m_iDisEquNums / (IMG_REAL)regionSample;
+	IMG_LREAL tPara, xInte_curve, xInte_edge, angle, xTemp, valTemp;
+	IMG_REAL dis;
+	IMG_INT regCurve, regEdge, index;
+	xInte_edge = (double)(rFittingNode[1] - rFittingNode[0]);
+	xInte_curve = (double)(m_rNode[m_iDims + 1] - m_rNode[m_iDims]);
+	IMG_INT curveEquPara, edgeEquPara;
+	curveEquPara = edgeEquPara = m_iDims + 1;
+	IMG_REAL *baseVal = nullptr;
+	baseVal = new IMG_REAL[m_iWeightNums];
+	//IMG_RCOORD regionPt_start, regionPt_end, vectorRegion, edgePt;
+
+	for (i = 0; i < regionSample; i++)
+	{
+		tPara = i*step + rFittingNode[0];
+		regCurve = floor((tPara - m_rNode[m_iDims]) / xInte_curve);
+		regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+		tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+		deriVal.x = 0.f; deriVal.y = 0.f;
+		for (j = 0; j < curveEquPara; j++)
+		{
+			tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((tPara), j);
+			tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((tPara), j);
+			deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((tPara), j);
+			deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((tPara), j);
+		}
+		memset(baseVal, 0, sizeof(IMG_REAL)*m_iWeightNums);
+
+		xTemp = tPara - regEdge*xInte_edge;
+		index = m_iDims;
+		for (j = regEdge - m_iDims; j <= regEdge; j++)
+		{
+			k = j;
+			if (k < 0) { k += m_iWeightNums; };
+			valTemp = 0.0;
+			for (m = 0; m < m_iDims + 1; m++)
+			{
+				valTemp += m_ClosedBaseFun[index].equCoeff[m] * pow((double)(xTemp + index*xInte_edge), m);
+			}
+			baseVal[k] = (IMG_REAL)valTemp;
+			index--;
+		}
+		//ippsAddProduct_32f(funVal, pWeight, &tempCoor.rho, m_iWeightNums);
+		ippsMul_32f(baseVal, pWeight, baseVal, m_iWeightNums);
+		ippsSum_32f(baseVal, m_iWeightNums, &dis, IppHintAlgorithm::ippAlgHintNone);
+
+		angle = atan2(deriVal.y, deriVal.x);
+		angle *= r2d;
+		if (angle < 0) { angle += 360; };
+		angle -= 90;
+		if (angle < 0) { angle += 360; };
+		//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+		dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+		dstParaPt.para = tPara;
+		vecCoor.push_back(dstParaPt);
+	}
+	nums = vecCoor.size();
+	coor = new PARA_POINT[nums];
+	for (int i = 0; i < nums; i++)
+	{
+		coor[i] = vecCoor[i];
+	}
+	for (i = 0; i < nums - 1; i++)
+	{
+		length += (IMG_REAL)pow(pow(double(coor[i].pt.x - coor[i + 1].pt.x), 2) + pow(double(coor[i].pt.y - coor[i + 1].pt.y), 2), 0.5);
+	}
+	length += (IMG_REAL)pow(pow(double(coor[0].pt.x - coor[nums - 1].pt.x), 2) + pow(double(coor[0].pt.y - coor[nums - 1].pt.y), 2), 0.5);
+	//m_rEdgeLength = length;
+	if (m_bDebug)
+	{
+		FILE *funfile;
+		char name[256];
+		sprintf(name, "%s\\curve_edgePts.txt", debugPath);
+		funfile = fopen(name, "w");
+		for (int j = 0; j < vecCoor.size(); j++)
+		{
+			fprintf(funfile, "%12.9e %12.9e\n", vecCoor[j].pt.x, vecCoor[j].pt.y);
+
+		}
+		fclose(funfile);
+	}
+
+
+	if (baseVal)
+	{
+		delete[]baseVal;
+		baseVal = nullptr;
+	}
+	vecCoor.clear();
+}
+
+IMG_VVOID CVisCurveFitting::GetClosedCurveEdge(IMG_INT regionSample, IMG_LREAL norLength, PARA_POINT *&coor, IMG_INT &nums, PARA_POINT *&upCoor, PARA_POINT *&downCoor, IMG_LRCOORD &meanPt)
+{
+	if (m_iWeightNums == 0 || !pWeight)
+	{
+		nums = 0;
+		return;
+	}
+	int i, j, k, m;
+	vector<PARA_POINT>vecCoor, vecUpCoor, vecDownCoor; PARA_POINT dstParaPt, coorUp, coorDown;
+	IMG_LRCOORD tempCoor1, tempCoor2, deriVal;
+	IMG_LREAL step = (double)(rFittingNode[m_iFittingNodeNums - 1] - rFittingNode[0]) / (double)regionSample;
+	//IMG_LREAL step = (IMG_REAL)m_iDisEquNums / (IMG_REAL)regionSample;
+	IMG_LREAL tPara, xInte_curve, xInte_edge, angle, xTemp, valTemp;
+	IMG_REAL dis;
+	IMG_INT regCurve, regEdge, index;
+	xInte_edge = (double)(rFittingNode[1] - rFittingNode[0]);
+	xInte_curve = (double)(m_rNode[m_iDims + 1] - m_rNode[m_iDims]);
+	IMG_INT curveEquPara, edgeEquPara;
+	curveEquPara = edgeEquPara = m_iDims + 1;
+	IMG_REAL *baseVal = nullptr;
+	baseVal = new IMG_REAL[m_iWeightNums];
+	//IMG_RCOORD regionPt_start, regionPt_end, vectorRegion, edgePt;
+	IMG_LRCOORD tempMeanPt = {0.0, 0.0};
+	for (i = 0; i < regionSample; i++)
+	{
+		tPara = i*step + rFittingNode[0];
+		regCurve = floor((tPara - m_rNode[m_iDims]) / xInte_curve);
+		regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+		tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+		deriVal.x = 0.f; deriVal.y = 0.f;
+		for (j = 0; j < curveEquPara; j++)
+		{
+			tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((tPara), j);
+			tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((tPara), j);
+			deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((tPara), j);
+			deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((tPara), j);
+		}
+		memset(baseVal, 0, sizeof(IMG_REAL)*m_iWeightNums);
+
+		xTemp = tPara - regEdge*xInte_edge;
+		index = m_iDims;
+		for (j = regEdge - m_iDims; j <= regEdge; j++)
+		{
+			k = j;
+			if (k < 0) { k += m_iWeightNums; };
+			valTemp = 0.0;
+			for (m = 0; m < m_iDims + 1; m++)
+			{
+				valTemp += m_ClosedBaseFun[index].equCoeff[m] * pow((double)(xTemp + index*xInte_edge), m);
+			}
+			baseVal[k] = (IMG_REAL)valTemp;
+			index--;
+		}
+		//ippsAddProduct_32f(funVal, pWeight, &tempCoor.rho, m_iWeightNums);
+		ippsMul_32f(baseVal, pWeight, baseVal, m_iWeightNums);
+		ippsSum_32f(baseVal, m_iWeightNums, &dis, IppHintAlgorithm::ippAlgHintNone);
+
+		angle = atan2(deriVal.y, deriVal.x);
+		angle *= r2d;
+		if (angle < 0) { angle += 360; };
+		angle -= 90;
+		if (angle < 0) { angle += 360; };
+		//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+		dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+		dstParaPt.para = tPara;
+		tempMeanPt.x += dstParaPt.pt.x;
+		tempMeanPt.y += dstParaPt.pt.y;
+		vecCoor.push_back(dstParaPt);
+
+		coorUp.pt.x = tempCoor1.x + norLength*cos(angle*d2r);
+		coorUp.pt.y = tempCoor1.y + norLength*sin(angle*d2r);
+		coorUp.pt.x = coorUp.pt.x + dis*cos(angle*d2r); coorUp.pt.y = coorUp.pt.y + dis*sin(angle*d2r);
+		coorUp.para = tPara;
+		vecUpCoor.push_back(coorUp);
+
+		coorDown.pt.x = tempCoor1.x - norLength*cos(angle*d2r);
+		coorDown.pt.y = tempCoor1.y - norLength*sin(angle*d2r);
+		coorDown.pt.x = coorDown.pt.x + dis*cos(angle*d2r); coorDown.pt.y = coorDown.pt.y + dis*sin(angle*d2r);
+		coorDown.para = tPara;
+		vecDownCoor.push_back(coorDown);
+	}
+	nums = vecCoor.size();
+	coor = new PARA_POINT[nums];
+	upCoor = new PARA_POINT[nums];
+	downCoor = new PARA_POINT[nums];
+	for (int i = 0; i < nums; i++)
+	{
+		coor[i] = vecCoor[i];
+		upCoor[i] = vecUpCoor[i];
+		downCoor[i] = vecDownCoor[i];
+	}
+	meanPt.x = tempMeanPt.x / nums;
+	meanPt.y = tempMeanPt.y / nums;
+	
+	if (m_bDebug)
+	{
+		FILE *funfile;
+		char name[256];
+		sprintf(name, "%s\\curve_edgePts.txt", debugPath);
+		funfile = fopen(name, "w");
+		for (int j = 0; j < vecCoor.size(); j++)
+		{
+			fprintf(funfile, "%12.9e %12.9e\n", vecCoor[j].pt.x, vecCoor[j].pt.y);
+
+		}
+		fclose(funfile);
+	}
+
+
+	if (baseVal)
+	{
+		delete[]baseVal;
+		baseVal = nullptr;
+	}
+	vecCoor.clear();
+	vecDownCoor.clear();
+	vecUpCoor.clear();
+}
+
+IMG_VVOID CVisCurveFitting::GetClosedCurveCorssLine(IMG_INT Sample, IMG_RCOORD startPt, IMG_RCOORD endPt, PARA_POINT *&coor, IMG_INT &nums)
+{
+	int VecNums;
+	int i, j, k, m;
+	if (m_iWeightNums == 0 || !pWeight)
+	{
+		nums = 0;
+		return;
+	}
+	IMG_REAL *baseVal = new IMG_REAL[m_iWeightNums];
+	vector<PARA_POINT>vecCoor, resCoor; PARA_POINT dstParaPt;
+	IMG_LRCOORD tempCoor1, tempCoor2, deriVal;
+	IMG_LREAL step = (double)(rFittingNode[m_iFittingNodeNums - 1] - rFittingNode[0]) / (double)Sample;
+	//IMG_LREAL step = (IMG_LREAL)m_iDisEquNums / (IMG_LREAL)Sample;
+	IMG_LREAL tPara, xInte_curve, xInte_edge, angle, xTemp, valTemp;
+	IMG_REAL dis;
+	IMG_INT regCurve, regEdge;
+	xInte_edge = (double)(rFittingNode[1] - rFittingNode[0]);
+	xInte_curve = (double)(m_rNode[m_iDims + 1] - m_rNode[m_iDims]);
+	IMG_INT curveEquPara, edgeEquPara, index;
+	curveEquPara = edgeEquPara = m_iDims + 1;
+	//IMG_REAL *baseVal = new IMG_REAL[m_iWeightNums];
+	//IMG_RCOORD regionPt_start, regionPt_end, vectorRegion, edgePt;
+	IMG_LREAL line_angle, line_a, line_b, line_c, powAdd;
+	tPara = m_rNode[m_iDims] + 0.00001;
+	regCurve = floor((tPara - m_rNode[m_iDims]) / xInte_curve);
+	regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+	tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+	deriVal.x = 0.f; deriVal.y = 0.f;
+	dis = 0.f;
+	memset(baseVal, 0, sizeof(IMG_REAL)*m_iWeightNums);
+	for (j = 0; j < curveEquPara; j++)
+	{
+		tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		//dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+	}
+	xTemp = tPara - regEdge*xInte_edge;
+	index = m_iDims;
+	for (j = regEdge - m_iDims; j <= regEdge; j++)
+	{
+		k = j;
+		if (k < 0) { k += m_iWeightNums; };
+		valTemp = 0.0;
+		for (m = 0; m < m_iDims + 1; m++)
+		{
+			valTemp += m_ClosedBaseFun[index].equCoeff[m] * pow((double)(xTemp + index*xInte_edge), m);
+		}
+		baseVal[k] = (IMG_REAL)valTemp;
+		index--;
+	}
+	ippsMul_32f(baseVal, pWeight, baseVal, m_iWeightNums);
+	ippsSum_32f(baseVal, m_iWeightNums, &dis, IppHintAlgorithm::ippAlgHintNone);
+
+	angle = atan2(deriVal.y, deriVal.x);
+	angle *= r2d;
+	if (angle < 0) { angle += 360; };
+	angle -= 90;
+	if (angle < 0) { angle += 360; };
+	//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+	dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+	dstParaPt.para = tPara;
+	vecCoor.push_back(dstParaPt);
+
+	for (i = 1; i < Sample; i++)
+	{
+		tPara = i*step + rFittingNode[0];
+		regCurve = floor((tPara - m_rNode[m_iDims]) / xInte_curve);
+		regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+		tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+		deriVal.x = 0.f; deriVal.y = 0.f;
+		dis = 0.f;
+		memset(baseVal, 0, sizeof(IMG_REAL)*m_iWeightNums);
+		for (j = 0; j < curveEquPara; j++)
+		{
+			tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			//dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		}
+		xTemp = tPara - regEdge*xInte_edge;
+		index = m_iDims;
+		for (j = regEdge - m_iDims; j <= regEdge; j++)
+		{
+			k = j;
+			if (k < 0) { k += m_iWeightNums; };
+			valTemp = 0.0;
+			for (m = 0; m < m_iDims + 1; m++)
+			{
+				valTemp += m_ClosedBaseFun[index].equCoeff[m] * pow((double)(xTemp + index*xInte_edge), m);
+			}
+			baseVal[k] = (IMG_REAL)valTemp;
+			index--;
+		}
+		ippsMul_32f(baseVal, pWeight, baseVal, m_iWeightNums);
+		ippsSum_32f(baseVal, m_iWeightNums, &dis, IppHintAlgorithm::ippAlgHintNone);
+		angle = atan2(deriVal.y, deriVal.x);
+		angle *= r2d;
+		if (angle < 0) { angle += 360; };
+		angle -= 90;
+		if (angle < 0) { angle += 360; };
+		//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+		dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+		dstParaPt.para = tPara;
+		vecCoor.push_back(dstParaPt);
+	}
+
+	tPara = m_rNode[m_iNodeNums - m_iDims - 1] - 0.00001;
+	regCurve = floor((tPara - m_rNode[m_iDims]) / xInte_curve);
+	regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+	tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+	deriVal.x = 0.f; deriVal.y = 0.f;
+	dis = 0.f;
+	memset(baseVal, 0, sizeof(IMG_REAL)*m_iWeightNums);
+	for (j = 0; j < curveEquPara; j++)
+	{
+		tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		//dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+	}
+	xTemp = tPara - regEdge*xInte_edge;
+	index = m_iDims;
+	for (j = regEdge - m_iDims; j <= regEdge; j++)
+	{
+		k = j;
+		if (k < 0) { k += m_iWeightNums; };
+		valTemp = 0.0;
+		for (m = 0; m < m_iDims + 1; m++)
+		{
+			valTemp += m_ClosedBaseFun[index].equCoeff[m] * pow((double)(xTemp + index*xInte_edge), m);
+		}
+		baseVal[k] = (IMG_REAL)valTemp;
+		index--;
+	}
+	ippsMul_32f(baseVal, pWeight, baseVal, m_iWeightNums);
+	ippsSum_32f(baseVal, m_iWeightNums, &dis, IppHintAlgorithm::ippAlgHintNone);
+	angle = atan2(deriVal.y, deriVal.x);
+	angle *= r2d;
+	if (angle < 0) { angle += 360; };
+	angle -= 90;
+	if (angle < 0) { angle += 360; };
+	//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+	dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+	dstParaPt.para = tPara;
+	vecCoor.push_back(dstParaPt);
+
+	VecNums = vecCoor.size();
+	IMG_LREAL *dis2line = new IMG_LREAL[VecNums]();
+	line_angle = atan2(endPt.y - startPt.y, endPt.x - startPt.x);
+	line_a = sin(line_angle);
+	line_b = -cos(line_angle);
+	line_c = -(endPt.x * line_a + endPt.y * line_b);
+	powAdd = pow(line_a * line_a + line_b * line_b, 0.5);
+	for (i = 0; i < VecNums; i++)
+	{
+		dis2line[i] = (line_a * vecCoor[i].pt.x + line_b*vecCoor[i].pt.y + line_c) / powAdd;
+	}
+	PARA_POINT leftPt, rightPt;
+	IMG_LREAL dist_left, dist_right;
+	for (i = 0; i < VecNums - 1; i++)
+	{
+		if (dis2line[i] * dis2line[i + 1] < 0)
+		{
+			leftPt = vecCoor[i]; rightPt = vecCoor[i + 1];
+			dist_left = dis2line[i]; dist_right = dis2line[i + 1];
+			while (1)
+			{
+				tPara = (leftPt.para + rightPt.para) / 2.f;
+				regCurve = floor((tPara - m_rNode[m_iDims]) / xInte_curve);
+				regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+				tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+				deriVal.x = 0.f; deriVal.y = 0.f;
+				dis = 0.f;
+				memset(baseVal, 0, sizeof(IMG_REAL)*m_iWeightNums);
+				for (j = 0; j < curveEquPara; j++)
+				{
+					tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+					tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+					deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+					deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+					//dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+				}
+				xTemp = tPara - regEdge*xInte_edge;
+				index = m_iDims;
+				for (j = regEdge - m_iDims; j <= regEdge; j++)
+				{
+					k = j;
+					if (k < 0) { k += m_iWeightNums; };
+					valTemp = 0.0;
+					for (m = 0; m < m_iDims + 1; m++)
+					{
+						valTemp += m_ClosedBaseFun[index].equCoeff[m] * pow((double)(xTemp + index*xInte_edge), m);
+					}
+					baseVal[k] = (IMG_REAL)valTemp;
+					index--;
+				}
+				ippsMul_32f(baseVal, pWeight, baseVal, m_iWeightNums);
+				ippsSum_32f(baseVal, m_iWeightNums, &dis, IppHintAlgorithm::ippAlgHintNone);
+
+				angle = atan2(deriVal.y, deriVal.x);
+				angle *= r2d;
+				if (angle < 0) { angle += 360; };
+				angle -= 90;
+				if (angle < 0) { angle += 360; };
+				//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+				dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+				dstParaPt.para = tPara;
+				dis = (line_a * dstParaPt.pt.x + line_b*dstParaPt.pt.y + line_c) / powAdd;
+				if (fabs(dis)< 0.01)
+				{
+					resCoor.push_back(dstParaPt);
+					break;
+				}
+				else
+				{
+					if (dis*dist_left < 0)
+					{
+						rightPt = dstParaPt;
+					}
+					else
+					{
+						leftPt = dstParaPt;
+					}
+				}
+			}
+		}
+	}
+
+	nums = resCoor.size();
+	if (nums < 0)
+	{
+		if (dis2line)
+		{
+			delete[]dis2line;
+			dis2line = nullptr;
+		}
+		return;
+	}
+	coor = new PARA_POINT[nums];
+	for (int i = 0; i < nums; i++)
+	{
+		coor[i] = resCoor[i];
+	}
+
+	if (dis2line)
+	{
+		delete[]dis2line;
+		dis2line = nullptr;
+	}
+	if (baseVal)
+	{
+		delete[]baseVal;
+		baseVal = nullptr;
+	}
+	resCoor.clear();
+	vecCoor.clear();
+}
+IMG_VVOID CVisCurveFitting::GetClosedCurveCorssCircle(IMG_INT Sample, IMG_CIRCLE circle, PARA_POINT *&coor, IMG_INT &nums)
+{
+	if (m_iWeightNums == 0 || !pWeight)
+	{
+		nums = 0;
+		return;
+	}
+	IMG_REAL *baseVal = new IMG_REAL[m_iWeightNums];
+	int /*sample = 100, */VecNums;
+	int i, j, k, m;
+	vector<PARA_POINT>vecCoor, resCoor; PARA_POINT dstParaPt;
+	IMG_LRCOORD tempCoor1, tempCoor2, deriVal;
+	IMG_LREAL step = (double)(rFittingNode[m_iFittingNodeNums - 1] - rFittingNode[0]) / (double)Sample;
+	//IMG_LREAL step = (IMG_LREAL)m_iDisEquNums / (IMG_LREAL)Sample;
+	IMG_LREAL tPara, xInte_curve, xInte_edge, angle, xTemp, valTemp;
+	IMG_REAL dis;
+	IMG_INT regCurve, regEdge, index;
+	xInte_edge = (double)(rFittingNode[1] - rFittingNode[0]);
+	xInte_curve = (double)(m_rNode[m_iDims + 1] - m_rNode[m_iDims]);
+	IMG_INT curveEquPara, edgeEquPara;
+	curveEquPara = edgeEquPara = m_iDims + 1;
+
+	tPara = m_rNode[m_iDims] + 0.00001;
+	regCurve = floor((tPara - m_rNode[m_iDims]) / xInte_curve);
+	regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+	tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+	deriVal.x = 0.f; deriVal.y = 0.f;
+	dis = 0.f;
+	memset(baseVal, 0, sizeof(IMG_REAL)*m_iWeightNums);
+	for (j = 0; j < curveEquPara; j++)
+	{
+		tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		//dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+	}
+	xTemp = tPara - regEdge*xInte_edge;
+	index = m_iDims;
+	for (j = regEdge - m_iDims; j <= regEdge; j++)
+	{
+		k = j;
+		if (k < 0) { k += m_iWeightNums; };
+		valTemp = 0.0;
+		for (m = 0; m < m_iDims + 1; m++)
+		{
+			valTemp += m_ClosedBaseFun[index].equCoeff[m] * pow((double)(xTemp + index*xInte_edge), m);
+		}
+		baseVal[k] = (IMG_REAL)valTemp;
+		index--;
+	}
+	ippsMul_32f(baseVal, pWeight, baseVal, m_iWeightNums);
+	ippsSum_32f(baseVal, m_iWeightNums, &dis, IppHintAlgorithm::ippAlgHintNone);
+	angle = atan2(deriVal.y, deriVal.x);
+	angle *= r2d;
+	if (angle < 0) { angle += 360; };
+	angle -= 90;
+	if (angle < 0) { angle += 360; };
+	//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+	dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+	dstParaPt.para = tPara;
+	vecCoor.push_back(dstParaPt);
+	for (i = 1; i < Sample; i++)
+	{
+		tPara = i*step + rFittingNode[0];
+		regCurve = floor((tPara - m_rNode[m_iDims]) / xInte_curve);
+		regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+		tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+		deriVal.x = 0.f; deriVal.y = 0.f;
+		dis = 0.f;
+		memset(baseVal, 0, sizeof(IMG_REAL)*m_iWeightNums);
+		for (j = 0; j < curveEquPara; j++)
+		{
+			tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			//dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		}
+		xTemp = tPara - regEdge*xInte_edge;
+		index = m_iDims;
+		for (j = regEdge - m_iDims; j <= regEdge; j++)
+		{
+			k = j;
+			if (k < 0) { k += m_iWeightNums; };
+			valTemp = 0.0;
+			for (m = 0; m < m_iDims + 1; m++)
+			{
+				valTemp += m_ClosedBaseFun[index].equCoeff[m] * pow((double)(xTemp + index*xInte_edge), m);
+			}
+			baseVal[k] = (IMG_REAL)valTemp;
+			index--;
+		}
+		ippsMul_32f(baseVal, pWeight, baseVal, m_iWeightNums);
+		ippsSum_32f(baseVal, m_iWeightNums, &dis, IppHintAlgorithm::ippAlgHintNone);
+
+		angle = atan2(deriVal.y, deriVal.x);
+		angle *= r2d;
+		if (angle < 0) { angle += 360; };
+		angle -= 90;
+		if (angle < 0) { angle += 360; };
+		//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+		dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+		dstParaPt.para = tPara;
+		vecCoor.push_back(dstParaPt);
+	}
+	tPara = m_rNode[m_iNodeNums - m_iDims - 1] - 0.00001;
+	regCurve = floor((tPara - m_rNode[m_iDims]) / xInte_curve);
+	regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+	tempCoor1.x = 0.0; tempCoor1.y = 0.0;
+	deriVal.x = 0.f; deriVal.y = 0.f;
+	dis = 0.f;
+	memset(baseVal, 0, sizeof(IMG_REAL)*m_iWeightNums);
+	for (j = 0; j < curveEquPara; j++)
+	{
+		tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		//dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+	}
+	xTemp = tPara - regEdge*xInte_edge;
+	index = m_iDims;
+	for (j = regEdge - m_iDims; j <= regEdge; j++)
+	{
+		k = j;
+		if (k < 0) { k += m_iWeightNums; };
+		valTemp = 0.0;
+		for (m = 0; m < m_iDims + 1; m++)
+		{
+			valTemp += m_ClosedBaseFun[index].equCoeff[m] * pow((double)(xTemp + index*xInte_edge), m);
+		}
+		baseVal[k] = (IMG_REAL)valTemp;
+		index--;
+	}
+	ippsMul_32f(baseVal, pWeight, baseVal, m_iWeightNums);
+	ippsSum_32f(baseVal, m_iWeightNums, &dis, IppHintAlgorithm::ippAlgHintNone);
+	angle = atan2(deriVal.y, deriVal.x);
+	angle *= r2d;
+	if (angle < 0) { angle += 360; };
+	angle -= 90;
+	if (angle < 0) { angle += 360; };
+	//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+	dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+	dstParaPt.para = tPara;
+	vecCoor.push_back(dstParaPt);
+
+	VecNums = vecCoor.size();
+	IMG_LREAL *dis2cent = new IMG_LREAL[VecNums]();
+
+	for (i = 0; i < VecNums; i++)
+	{
+		dis2cent[i] = pow(pow(circle.center.x - vecCoor[i].pt.x, 2) + pow(circle.center.y - vecCoor[i].pt.y, 2), 0.5);
+	}
+	PARA_POINT leftPt, rightPt;
+	IMG_LREAL dist_left, dist_right;
+	for (i = 0; i < VecNums - 1; i++)
+	{
+		if ((dis2cent[i] - circle.radius) * (dis2cent[i + 1] - circle.radius)  < 0)
+		{
+			leftPt = vecCoor[i]; rightPt = vecCoor[i + 1];
+			dist_left = dis2cent[i]; dist_right = dis2cent[i + 1];
+			while (1)
+			{
+				tPara = (leftPt.para + rightPt.para) / 2.f;
+				regCurve = floor((tPara - m_rNode[m_iDims]) / xInte_curve);
+				regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+				tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+				deriVal.x = 0.f; deriVal.y = 0.f;
+				dis = 0.f;
+				memset(baseVal, 0, sizeof(IMG_REAL)*m_iWeightNums);
+				for (j = 0; j < curveEquPara; j++)
+				{
+					tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+					tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+					deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+					deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+					//dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+				}
+				xTemp = tPara - regEdge*xInte_edge;
+				index = m_iDims;
+				for (j = regEdge - m_iDims; j <= regEdge; j++)
+				{
+					k = j;
+					if (k < 0) { k += m_iWeightNums; };
+					valTemp = 0.0;
+					for (m = 0; m < m_iDims + 1; m++)
+					{
+						valTemp += m_ClosedBaseFun[index].equCoeff[m] * pow((double)(xTemp + index*xInte_edge), m);
+					}
+					baseVal[k] = (IMG_REAL)valTemp;
+					index--;
+				}
+				ippsMul_32f(baseVal, pWeight, baseVal, m_iWeightNums);
+				ippsSum_32f(baseVal, m_iWeightNums, &dis, IppHintAlgorithm::ippAlgHintNone);
+				angle = atan2(deriVal.y, deriVal.x);
+				angle *= r2d;
+				if (angle < 0) { angle += 360; };
+				angle -= 90;
+				if (angle < 0) { angle += 360; };
+				//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+				dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+				dstParaPt.para = tPara;
+				dis = pow(pow(circle.center.x - dstParaPt.pt.x, 2) + pow(circle.center.y - dstParaPt.pt.y, 2), 0.5);
+				if (fabs(dis - circle.radius)< 0.01)
+				{
+					resCoor.push_back(dstParaPt);
+					break;
+				}
+				else
+				{
+					if ((dis - circle.radius) * (dist_left - circle.radius)< 0)
+					{
+						rightPt = dstParaPt;
+					}
+					else
+					{
+						leftPt = dstParaPt;
+					}
+				}
+			}
+		}
+	}
+
+	nums = resCoor.size();
+	if (nums < 0)
+	{
+		return;
+	}
+	coor = new PARA_POINT[nums];
+	for (int i = 0; i < nums; i++)
+	{
+		coor[i] = resCoor[i];
+	}
+
+	if (dis2cent)
+	{
+		delete[]dis2cent;
+		dis2cent = nullptr;
+	}
+	if (baseVal)
+	{
+		delete[]baseVal;
+		baseVal = nullptr;
+	}
+	resCoor.clear();
+	vecCoor.clear();
+}
+
+IMG_REAL CVisCurveFitting::GetClosedCurveLength(IMG_REAL ItePrecision)
+{
+	IMG_REAL length = 0.f;
+	if (m_iWeightNums == 0 || !pWeight)
+	{
+		return length;
+	}
+	IMG_REAL *baseVal = new IMG_REAL[m_iWeightNums];
+	IMG_LREAL beforeLen, afterLen, tempLen;
+	beforeLen = afterLen = tempLen = 0.0;
+	int i, j, k, m;
+	IMG_RCOORD tempCoor1, dstCoor, deriVal;
+	vector<IMG_RCOORD>vecCoor;
+	IMG_LREAL step;
+	IMG_LREAL tPara, len, xInte_curve, xInte_edge, angle, xTemp, valTemp;
+	IMG_REAL dis;
+	IMG_INT regCurve, regEdge, index, Sample, IteTimes, ptNums;
+	xInte_edge = (double)(rFittingNode[1] - rFittingNode[0]);
+	xInte_curve = (double)(m_rNode[m_iDims + 1] - m_rNode[m_iDims]);
+	IMG_INT curveEquPara, edgeEquPara;
+	curveEquPara = edgeEquPara = m_iDims + 1;
+	IteTimes = 0;
+	while (2- IteTimes)
+	{
+		vecCoor.clear();
+		Sample = m_rCurveLength * pow(2, IteTimes);
+		step = (double)(rFittingNode[m_iFittingNodeNums - 1] - rFittingNode[0]) / (double)Sample;
+		for (i = 0; i < Sample; i++)
+		{
+			tPara = i*step + rFittingNode[0];
+			regCurve = floor((tPara - m_rNode[m_iDims]) / xInte_curve);
+			regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+			tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+			deriVal.x = 0.f; deriVal.y = 0.f;
+			dis = 0.f;
+			memset(baseVal, 0, sizeof(IMG_REAL)*m_iWeightNums);
+			for (j = 0; j < curveEquPara; j++)
+			{
+				tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+				tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+				deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+				deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+				//dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			}
+			xTemp = tPara - regEdge*xInte_edge;
+			index = m_iDims;
+			for (j = regEdge - m_iDims; j <= regEdge; j++)
+			{
+				k = j;
+				if (k < 0) { k += m_iWeightNums; };
+				valTemp = 0.0;
+				for (m = 0; m < m_iDims + 1; m++)
+				{
+					valTemp += m_ClosedBaseFun[index].equCoeff[m] * pow((double)(xTemp + index*xInte_edge), m);
+				}
+				baseVal[k] = (IMG_REAL)valTemp;
+				index--;
+			}
+			ippsMul_32f(baseVal, pWeight, baseVal, m_iWeightNums);
+			ippsSum_32f(baseVal, m_iWeightNums, &dis, IppHintAlgorithm::ippAlgHintNone);
+			angle = atan2(deriVal.y, deriVal.x);
+			angle *= r2d;
+			if (angle < 0) { angle += 360; };
+			angle -= 90;
+			if (angle < 0) { angle += 360; };
+			//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+			dstCoor.x = tempCoor1.x + dis*cos(angle*d2r); dstCoor.y = tempCoor1.y + dis*sin(angle*d2r);
+			vecCoor.push_back(dstCoor);
+		}
+		ptNums = vecCoor.size();
+		afterLen = 0.f;
+		for (i = 0; i < ptNums - 1; i++)
+		{
+			afterLen += (IMG_REAL)pow(pow(double(vecCoor[i].x - vecCoor[i + 1].x), 2) + pow(double(vecCoor[i].y - vecCoor[i + 1].y), 2), 0.5);
+		}
+		afterLen += (IMG_REAL)pow(pow(double(vecCoor[0].x - vecCoor[ptNums - 1].x), 2) + pow(double(vecCoor[0].y - vecCoor[ptNums - 1].y), 2), 0.5);
+		if (afterLen/ ptNums<1||fabs(afterLen - beforeLen) < ItePrecision)
+		{
+			if (baseVal)
+			{
+				delete[]baseVal;
+				baseVal = nullptr;
+			}
+			m_rEdgeLength = afterLen;
+			return afterLen;
+		}
+		beforeLen = afterLen;
+		IteTimes++;
+	}
+
+}
+
+IMG_VVOID CVisCurveFitting::GetClosedCurveLength(PARA_POINT pt1, PARA_POINT pt2, IMG_INT regionSample, IMG_REAL &length)
+{
+	if (m_iWeightNums == 0 || !pWeight)
+	{
+		length = 0.f;
+		return;
+	}
+	IMG_REAL *baseVal = new IMG_REAL[m_iWeightNums];
+	IMG_REAL para1 = pt1.para; IMG_REAL para2 = pt2.para;
+	int i, j, k, m;
+	PARA_POINT dstParaPt, beforePt;
+	beforePt = pt1;
+	length = 0.f;
+	IMG_RCOORD tempCoor1, tempCoor2, deriVal;
+	IMG_LREAL step = (para2 - para1) / (IMG_LREAL)regionSample;
+	IMG_LREAL tPara, len, xInte_curve, xInte_edge, angle, xTemp, valTemp;
+	IMG_REAL dis;
+	IMG_INT regCurve, regEdge, index;
+	xInte_edge = (double)(rFittingNode[1] - rFittingNode[0]);
+	xInte_curve = (double)(m_rNode[m_iDims + 1] - m_rNode[m_iDims]);
+	IMG_INT curveEquPara, edgeEquPara;
+	curveEquPara = edgeEquPara = m_iDims + 1;
+
+	regCurve = floor((para1 - m_rNode[m_iDims]) / xInte_curve);
+	regEdge = floor((para1 - rFittingNode[0]) / xInte_edge);
+	tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+	deriVal.x = 0.f; deriVal.y = 0.f;
+	dis = 0.f;
+	memset(baseVal, 0, sizeof(IMG_REAL)*m_iWeightNums);
+	for (j = 0; j < curveEquPara; j++)
+	{
+		tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(para1), j);
+		tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(para1), j);
+		deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(para1), j);
+		deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(para1), j);
+		//dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(para1), j);
+	}
+	xTemp = para1 - regEdge*xInte_edge;
+	index = m_iDims;
+	for (j = regEdge - m_iDims; j <= regEdge; j++)
+	{
+		k = j;
+		if (k < 0) { k += m_iWeightNums; };
+		valTemp = 0.0;
+		for (m = 0; m < m_iDims + 1; m++)
+		{
+			valTemp += m_ClosedBaseFun[index].equCoeff[m] * pow((double)(xTemp + index*xInte_edge), m);
+		}
+		baseVal[k] = (IMG_REAL)valTemp;
+		index--;
+	}
+	ippsMul_32f(baseVal, pWeight, baseVal, m_iWeightNums);
+	ippsSum_32f(baseVal, m_iWeightNums, &dis, IppHintAlgorithm::ippAlgHintNone);
+	angle = atan2(deriVal.y, deriVal.x);
+	angle *= r2d;
+	if (angle < 0) { angle += 360; };
+	angle -= 90;
+	if (angle < 0) { angle += 360; };
+	dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+	if (fabs(dstParaPt.pt.x - pt1.pt.x) >= 1 || fabs(dstParaPt.pt.y - pt1.pt.y) >= 1)
+	{
+		length = 0.f;
+		return;
+	}
+
+	regCurve = floor((para2 - m_rNode[m_iDims]) / xInte_curve);
+	regEdge = floor((para2 - rFittingNode[0]) / xInte_edge);
+	tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+	deriVal.x = 0.f; deriVal.y = 0.f;
+	dis = 0.f;
+	memset(baseVal, 0, sizeof(IMG_REAL)*m_iWeightNums);
+	for (j = 0; j < curveEquPara; j++)
+	{
+		tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(para2), j);
+		tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(para2), j);
+		deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(para2), j);
+		deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(para2), j);
+		//dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(para2), j);
+	}
+	xTemp = para2 - regEdge*xInte_edge;
+	index = m_iDims;
+	for (j = regEdge - m_iDims; j <= regEdge; j++)
+	{
+		k = j;
+		if (k < 0) { k += m_iWeightNums; };
+		valTemp = 0.0;
+		for (m = 0; m < m_iDims + 1; m++)
+		{
+			valTemp += m_ClosedBaseFun[index].equCoeff[m] * pow((double)(xTemp + index*xInte_edge), m);
+		}
+		baseVal[k] = (IMG_REAL)valTemp;
+		index--;
+	}
+	ippsMul_32f(baseVal, pWeight, baseVal, m_iWeightNums);
+	ippsSum_32f(baseVal, m_iWeightNums, &dis, IppHintAlgorithm::ippAlgHintNone);
+	angle = atan2(deriVal.y, deriVal.x);
+	angle *= r2d;
+	if (angle < 0) { angle += 360; };
+	angle -= 90;
+	if (angle < 0) { angle += 360; };
+	//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+	dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+	if (fabs(dstParaPt.pt.x - pt2.pt.x) >= 1 || fabs(dstParaPt.pt.y - pt2.pt.y) >= 1)
+	{
+		length = 0.f;
+		return;
+	}
+
+	for (i = 1; i < regionSample + 1; i++)
+	{
+
+		tPara = i*step + para1;
+		regCurve = floor((tPara - m_rNode[m_iDims]) / xInte_curve);
+		regEdge = floor((tPara - rFittingNode[0]) / xInte_edge);
+		tempCoor1.x = 0.f; tempCoor1.y = 0.f;
+		deriVal.x = 0.f; deriVal.y = 0.f;
+		dis = 0.f;
+		memset(baseVal, 0, sizeof(IMG_REAL)*m_iWeightNums);
+		for (j = 0; j < curveEquPara; j++)
+		{
+			tempCoor1.x += m_paraEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			tempCoor1.y += m_paraEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			deriVal.x += m_deriEqu[regCurve].xEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			deriVal.y += m_deriEqu[regCurve].yEqu.equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+			//dis += m_pDisEqu[regEdge].equCoeff[j] * pow((IMG_LREAL)(tPara), j);
+		}
+		xTemp = tPara - regEdge*xInte_edge;
+		index = m_iDims;
+		for (j = regEdge - m_iDims; j <= regEdge; j++)
+		{
+			k = j;
+			if (k < 0) { k += m_iWeightNums; };
+			valTemp = 0.0;
+			for (m = 0; m < m_iDims + 1; m++)
+			{
+				valTemp += m_ClosedBaseFun[index].equCoeff[m] * pow((double)(xTemp + index*xInte_edge), m);
+			}
+			baseVal[k] = (IMG_REAL)valTemp;
+			index--;
+		}
+		ippsMul_32f(baseVal, pWeight, baseVal, m_iWeightNums);
+		ippsSum_32f(baseVal, m_iWeightNums, &dis, IppHintAlgorithm::ippAlgHintNone);
+		angle = atan2(deriVal.y, deriVal.x);
+		angle *= r2d;
+		if (angle < 0) { angle += 360; };
+		angle -= 90;
+		if (angle < 0) { angle += 360; };
+		//tempCoor1.x = tempCoor1.x*m_xRange + m_xMin; tempCoor1.y = tempCoor1.y*m_yRange + m_yMin;
+		dstParaPt.pt.x = tempCoor1.x + dis*cos(angle*d2r); dstParaPt.pt.y = tempCoor1.y + dis*sin(angle*d2r);
+		dstParaPt.para = tPara;
+		len = pow(pow(beforePt.pt.x - dstParaPt.pt.x, 2) + pow(beforePt.pt.y - dstParaPt.pt.y, 2), 0.5);
+		length += len;
+		beforePt = dstParaPt;
+	}
+	if (baseVal)
+	{
+		delete[]baseVal;
+		baseVal = nullptr;
+	}
+}
