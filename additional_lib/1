@@ -1,26 +1,28 @@
-#ifndef VIS_ALIGN_HEADER
-#define VIS_ALIGN_HEADER
-#include <base.h>
-#include <ViType.h>
-#include <limits.h>
-#include <string.h>
 
-#include <assert.h>
-#include <VisMEM.h>
-#include <VisImage.h>
-#include <deque>
-//#include "VisEdge.h"
 
-#ifdef  CVISALIGN_EXPORTS
-#define CVISALIGN_DLL_EXPORTS __declspec(dllexport)
-#else
-#define CVISALIGN_DLL_EXPORTS __declspec(dllimport)   
+#ifndef __SMARTCSS_VITYPE_H__
+#define __SMARTCSS_VITYPE_H__
+
+
+
+#ifndef FALSE
+#define FALSE               0
 #endif
 
-#define OK						(0)
-#define IMG_TRUE				(1)
-#define IMG_FALSE				(0)
+#ifndef TRUE
+#define TRUE                1
+#endif
 
+#ifndef CONST
+#define CONST               const
+#endif
+
+#define FALSE   0
+#define TRUE    1
+#define NULL    0
+
+#ifndef VIS_ERR_MACRO
+#define VIS_ERR_MACRO
 #define VIS_ERR_INVALID_ARG		(-1)
 #define MEM_ERR_MALLOC			(-2)
 #define ALIGN_ERR_NO_OBJECT_FOUND (-4)
@@ -36,1481 +38,578 @@
 #define VIS_ERR_OPEN_FILE		(-14)
 #define VIS_ERR_LEARN_FAIL		(-15)
 #define VIS_ERR_MATH_ERR		(-16)
-#define IMG_OFF(sbuf,soff) (((size_t)((sbuf)->linestep) * \
-                            (soff)->y + (soff)->x))
-#define BUF_OFF(pWorkptr, pBuf, pOff)							\
-pWorkptr = ((pBuf)->ptr + IMG_OFF(pBuf,pOff));
+#endif // !VIS_ERR_MACRO
 
-#define ALIGN_HYPOT(a,b)	sqrt( ((double)(a))*((double)(a))+((double)(b))*((double)(b)) )// Arvin 20080626 update the hypot by sqrt
-#define ALIGN_DIST(a,b)	ALIGN_HYPOT(((a).x)-((b).x),((a).y)-((b).y)) 
+#ifndef VIS_LOG_LEVEL
+#define VIS_LOG_LEVEL
+#define VIS_LOG_NONE (0)
+#define VIS_LOG_SIMPLE (512)
+#define VIS_LOG_NORMAL (1)
+#define VIS_LOG_DETAIL (5)
+#define VIS_LOG_TIME (256)
+#define VIS_LOG_LEVEL
+#endif // !VIS_LOG_LEVEL
 
+#ifndef VI_BASETYPES_DEF
+#define VI_BASETYPES_DEF
+typedef void				IMG_VVOID;
+typedef signed char			IMG_BYTE;
+typedef unsigned char		IMG_UBYTE;
+typedef signed short		IMG_WORD;
+typedef unsigned short		IMG_UWORD;
+typedef signed int			IMG_INT;
+typedef unsigned int		IMG_UINT;
+typedef signed long			IMG_LWORD;
+typedef unsigned long		IMG_ULWORD;
+typedef signed __int64		IMG_XLWORD;
+typedef unsigned __int64	IMG_UXLWORD;
+typedef float				IMG_REAL;
+typedef double				IMG_LREAL;
+typedef IMG_VVOID			*IMG_PVVOID;
+typedef IMG_BYTE			*IMG_PBYTE;
+typedef IMG_UBYTE			*IMG_PUBYTE;
+typedef IMG_WORD			*IMG_PWORD;
+typedef IMG_UWORD			*IMG_PUWORD;
+typedef IMG_INT				*IMG_PINT;
+typedef IMG_UINT			*IMG_PUINT;
+typedef IMG_LWORD			*IMG_PLWORD;
+typedef IMG_ULWORD			*IMG_PULWORD;
+typedef IMG_XLWORD			*IMG_PXLWORD;
+typedef IMG_UXLWORD			*IMG_PUXLWORD;
+typedef IMG_REAL			*IMG_PREAL;
+typedef IMG_LREAL			*IMG_PLREAL;
+typedef char				IMG_CHAR;
+typedef wchar_t				IMG_WCHAR;
+typedef int                 IMG_BOOL;
+typedef IMG_CHAR			*IMG_LPSTR;
+typedef IMG_WCHAR			*IMG_LPWSTR;
+typedef IMG_BOOL            *IMG_PBOOL;
 
-#define MEM_AllocBufAtBank_align(psz, pbuf, size_of_byte) \
-{(pbuf)->size = *(psz);(pbuf)->linestep = (psz)->width;(pbuf)->ptr = mem_pool.MEM_Malloc((size_t)((psz)->width)*(size_t)((psz)->height)*(size_of_byte), 16, __FILE__, __FUNCTION__, __LINE__);}
-#define MEM_AllocBufAtBank(psz, pbuf, size_of_byte) \
-{(pbuf)->size = *(psz);(pbuf)->linestep = (psz)->width;(pbuf)->ptr = mem_pool.MEM_Malloc((size_t)((psz)->width)*(size_t)((psz)->height)*(size_of_byte), 16, __FILE__, __FUNCTION__, __LINE__);}
-
-#define IMG_MAX(x,y)	((x) > (y) ? (x) : (y))
-#define IMG_MIN(x,y)	((x) < (y) ? (x) : (y))
-//
-//#define Malloc(size)  mem_pool.MEM_Malloc(size, 16, __FILE__, __FUNCTION__, __LINE__)
-//#define MallocN(size) mem_pool.MEM_MallocN(size, __FILE__, __FUNCTION__, __LINE__)
-
-#define IMG_CHANNEL_COLOR (3)
-#define IMG_CHANNEL_GRAY (1)
-
-const IMG_LREAL PI = (3.1415926535);
-const IMG_LREAL D2R = (PI / 180);
-const IMG_LREAL R2D = (180 / PI);
-
-#define FILENAME_MAX_LENGTH	(256)
-#define SYS_Assert(exp) assert(exp)
-
-//Color normal direction related
-#define ALIGN_INDEX_NCOLOR(x)	((((IMG_WORD)(x))>>13)&0x3)
-#define ALIGN_PHASE1_NCOLOR(x)	((((IMG_WORD)(x))>>11)&0x3)
-#define ALIGN_PHASE2_NCOLOR(x)	((((IMG_WORD)(x))>>9)&0x3)
-#define ALIGN_NORMAL_DIR_NCOLOR(x) (((IMG_WORD)(x))&0x1ff)
-#define ALIGN_IS_NCOLOR_NORMAL(x) (((IMG_WORD)(x))<-0x2000)
-#define ALIGN_NCOLOR_DIR_MATCH_EXACT					(0)		//exactly same
-#define ALIGN_NCOLOR_DIR_MATCH_LEARN					(1)		//match learn, ignore search extra attrib
-#define ALIGN_NCOLOR_DIR_MATCH_LEARN_MAIN				(2)		//match learn main channel, ignore learn and search extra
-#define ALIGN_NCOLOR_DIR_MATCH_SEARCHMAX				(3)		//match learn main channel with search max channel
-#define ALIGN_NCOLOR_DIR_MATCH_SEARCH_MAIN_MAX_RETRY	(4)		//match learn main channel first, retry max channel if main channel failed
-
-#define ALIGN_SRCH_MULTIOBJ_NEAREST						(1)
-#define	ALIGN_SRCH_MULTIOBJ_HIGHEST						(3)
-#define ALIGN_SRCH_MULTIOBJ_NEAREST_OVERLAPREJ			(4)
-
-#define ALIGN_SRCH_FITTING_GENERAL						(0)
-#define ALIGN_SRCH_FITTING_ELLIPSE						(1)
-#define ALIGN_SRCH_FITTING_INFINIT						(2)
-
-
-#define ALIGN_CIRCLE_TYPE								ALIGN_SRCH_FITTING_GENERAL
-#define ALIGN_ELLIPSE_TYPE								ALIGN_SRCH_FITTING_ELLIPSE
-
-#define ALIGN_DEBUG_SIMPLE		VIS_LOG_SIMPLE
-#define ALIGN_DEBUG_NORMAL		VIS_LOG_NORMAL
-#define ALIGN_DEBUG_DETAIL		VIS_LOG_DETAIL
-#define ALIGN_DEBUG_TIME		VIS_LOG_TIME
-#define ALIGN_DEBUG_NONE		VIS_LOG_NONE
+typedef IMG_VVOID			*IMG_PVIBASE;
+#endif  /* !VI_BASETYPES_DEF IMG*/
 
 
 
-#ifdef  CVISALIGN_EXPORTS
-#define CVISALIGN_DLL_EXPORTS __declspec(dllexport)
-#else
-#define CVISALIGN_DLL_EXPORTS __declspec(dllimport)   
-#endif
+
+typedef char CHAR;
+typedef wchar_t WCHAR;
+
+typedef WCHAR *PWCHAR, *LPWCH, *PWCH;
+typedef CONST WCHAR *LPCWCH, *PCWCH;
+
+typedef CHAR *PCHAR, *LPCH, *PCH;
+typedef CONST CHAR *LPCCH, *PCCH;
 
 
-//////////////////////////////////////////////////////////////////////////
-//		Learn
-//////////////////////////////////////////////////////////////////////////
-#define ALIGN_MAX_NO_OF_LINE			(20)
-#define ALIGN_MAX_NO_OF_OBJ_CORNER		(20)
-#define ALIGN_REC_PVCS_VER_MAX_LEN		(50)
-#define ALIGN_MAX_LEARN_CORNER			(20)
-#define ALIGN_MAX_LEARN_LINE			(20)
-#define ALIGN_MAX_LEARN_REDUCTION		(8)
+typedef WCHAR *LPWSTR, *PWSTR;
+typedef CONST WCHAR *LPCWSTR, *PCWSTR;
+
+typedef CHAR *LPSTR, *PSTR;
+typedef CONST CHAR *LPCSTR, *PCSTR;
 
 
-#define ALIGN_LRN_LINE_POLARITY_BOTH		(1)
-#define ALIGN_LRN_LINE_POLARITY_LEFT_HAND 	(2)
-#define ALIGN_LRN_LINE_POLARITY_RIGHT_HAND 	(3)
-#define ALIGN_LRN_LINE_POLARITY_MAJORITY	(4)
 
-#define ALIGN_LEARN_FEAT_SELECTION_PATTERN	(1)
-#define ALIGN_LEARN_FEAT_SELECTION_LINE		(2)
+#ifdef  UNICODE
 
-#define ALIGN_LRN_ADV_SYMMETRIC_POS		(1)
-#define ALIGN_LRN_ADV_EDGE_GAUGE_MODE	(2)
-#define ALIGN_LRN_ADV_EDGE_SELECT_ALL	(4)
-#define ALING_LRN_ADV_SKIP_ROTATION_FEATURE_RESELECTION (8)
+#ifndef _TCHAR_DEFINED
+typedef WCHAR TCHAR, *PTCHAR;
+typedef WCHAR TBYTE, *PTBYTE;
+#define _TCHAR_DEFINED
+#endif /* !_TCHAR_DEFINED */
 
-#define ALIGN_LRN_PREPROCESS_DILATE (1)
-#define ALIGN_LRN_PREPROCESS_ERODE (2)
-#define ALIGN_LRN_PREPROCESS_OPEN (3)
-#define ALIGN_LRN_PREPROCESS_CLOSE (4)
-#define ALIGN_LRN_PREPROCESS_GAUSSIAN (5)
+typedef LPWCH LPTCH, PTCH;
+typedef LPCWCH LPCTCH, PCTCH;
+typedef LPWSTR PTSTR, LPTSTR;
+typedef LPCWSTR PCTSTR, LPCTSTR;
 
-class CVisAlignLearnInterData;
-class CVisAlignResultPointMatch;
-struct _IMG_OBJ;
-typedef struct _IMG_OBJ IMG_OBJ;
-enum LINEDIRECTION //确定是检测线的哪边的区域的特征点，也就是过滤掉一部分边缘
-{
-	TYPE_LEFTHAND = 0,
-	TYPE_RIGHTHAND = 1,
-	TYPE_BOTH = 2,
-    TYPE_MAJORITY = 3
+#else   /* UNICODE */               
+
+#ifndef _TCHAR_DEFINED
+typedef char TCHAR, *PTCHAR;
+typedef unsigned char TBYTE, *PTBYTE;
+#define _TCHAR_DEFINED
+#endif /* !_TCHAR_DEFINED */
+
+typedef LPCH LPTCH, PTCH;
+typedef LPCCH LPCTCH, PCTCH;
+typedef LPSTR PTSTR, LPTSTR;
+typedef LPCSTR PCTSTR, LPCTSTR;
+
+#endif /* UNICODE */ 
+
+
+enum class EDGETYPE {
+	ANY,	//for line ,extract line with both light and dark edge.
+	LIGHT2DARK,
+	DARK2LIGHT,
+	WHITECENTER,
+	BLACKCENTER,
+	BOTH, //for line, extract both light and dark line, but for single line only one kind of edge would be effective
+	WHITEWIDTH,
+	BLACKWIDTH
 };
-enum POS_SORT_METHOD
+
+typedef struct _IMG_COORD
 {
-	SORT_X = 0,
-	SORT_Y = 1,
-	SORT_Z = 2,
-	SORT_N = 3,
-	SORT_AUTO = 4
-};
-typedef struct _IMG_LINE_FEAT_SEL
+	IMG_INT		x;
+	IMG_INT		y;
+} IMG_COORD;
+typedef struct _IMG_WCOORD
 {
-	IMG_RCOORD		rcoStart, rcoEnd;
-	IMG_REAL		rLineOffset;
-	LINEDIRECTION	Polarity;		//select phase of edge
-	IMG_REAL		rLinePtAngleBias;	//
+	IMG_WORD		x;
+	IMG_WORD		y;
+} IMG_WCOORD;
 
-	IMG_REAL		rDummy[10];
-}IMG_LINE_FEAT_SEL;
-typedef struct _ALIGN_LEARN_OPTION
+typedef struct _IMG_ICOORD
 {
-	IMG_UWORD	uwDebug;
+	IMG_INT     x;
+	IMG_INT     y;
+} IMG_ICOORD;
 
-	IMG_UINT	ulImageChannel;
-	IMG_WINDOW 	stLearnROI;		//learn ROI 
-	IMG_WINDOW	stTestROI;		//test ROI
-	IMG_UWORD	uwCornerNum;	//object corner num
-	IMG_RCOORD	rcoCorner[ALIGN_MAX_LEARN_CORNER]; 	//corner of learn object
-	IMG_RCOORD	rcoRef;			//user input reference;
-	IMG_UINT	ulReduction;	//reduction layer levels
-	IMG_UINT	ulHighestLayer;	//skip the layer higher than this value
+typedef struct _IMG_RCOORD
+{
+	IMG_REAL     x;
+	IMG_REAL     y;
+} IMG_RCOORD;
 
-	IMG_WORD	wPreprocessMode;
-	IMG_WORD	wPreprocKernelSize;
-	IMG_REAL	rPreprocParam;
-	IMG_UINT	ulEdgeThreshold;
-	IMG_UINT	ulEdgeKernelSize;
-	IMG_SIZE	szEdgeKernel[ALIGN_MAX_LEARN_REDUCTION];
+typedef struct _IMG_LRCOORD
+{
+	IMG_LREAL     x;
+	IMG_LREAL     y;
+} IMG_LRCOORD;
 
-	IMG_UINT	ulLearnFetureSelection;
-	IMG_UINT	ulNumOfAlignFeature;
+typedef struct _IMG_POSITION
+{
+	IMG_RCOORD coord;
+	IMG_LREAL  angle;
+} IMG_POSITION;
 
-	IMG_UWORD	uwLrnLineNum;
-	IMG_LINE_FEAT_SEL stLine[ALIGN_MAX_LEARN_LINE];
+typedef struct _IMG_RCOORD3D
+{
+	IMG_REAL x, y, z;
+} IMG_RCOORD3D;
 
-	IMG_REAL	rUniquenessLevel;//分数，search找自己
-	IMG_UINT	ulMask;
-	IMG_UINT	ulAdvOpt;
+typedef struct _IMG_SIZE
+{
+	IMG_INT		width;
+	IMG_INT		height;
+} IMG_SIZE;
 
-	IMG_RSIZE	rszPixelSize;
+typedef struct _IMG_ISIZE
+{
+	IMG_UINT     width;
+	IMG_UINT     height;
+} IMG_ISIZE;
 
-	IMG_REAL	rScaleIndependenceThd;
-	IMG_REAL	rRoationIndependenceThd;
-	IMG_CHAR	strLogPath[FILENAME_MAX_LENGTH];
+typedef struct _IMG_RSIZE
+{
+	IMG_REAL        width;
+	IMG_REAL        height;
+} IMG_RSIZE;
 
-	IMG_REAL	rDummy[20];
-	IMG_VVOID	*pvDummy[10];
-	
-}ALIGN_LEARN_OPTION;
+typedef struct _IMG_UWSIZE
+{
+	IMG_UWORD		width;
+	IMG_UWORD		height;
+} IMG_UWSIZE;
 
-typedef struct _IMG_FEATUREPT{
-	IMG_RCOORD		rco;
-	IMG_REAL        angle;				// the bit will be moved to ulwGroup later on
-	IMG_UBYTE		ubLineNum;			///< to which lines the edge point belongs, 0 means it doesn't belong to any lines
-	IMG_UBYTE		ubOutMain;
-	IMG_REAL		rWeighting;		///< weighting for edge points voting in search
-	IMG_REAL        PointWeighting;
+typedef struct _IMG_BBUF
+{
+	IMG_BYTE  *ptr;      /* pointer to the image buffer start address */
+	IMG_SIZE  size;
+	IMG_INT		linestep;  /* offset from one row of image buffer to
+						   another on the same column in term of pixel */
+} IMG_BBUF;
 
-	IMG_ULWORD		ContourID;			///< group flag (suggested bitwise operation)
-	IMG_UWORD		uwEdgeMag;			///< edge magnitude
-	IMG_UWORD		uwLrnEdgeMag;
+typedef struct _IMG_UBBUF
+{
+	IMG_UBYTE  *ptr;
+	IMG_SIZE   size;
+	IMG_INT		linestep; /* offset from one row of image buffer to
+						  another on the same column in term of pixel */
+} IMG_UBBUF;
 
-	IMG_UBYTE		ubVoteHalfAngle;
-	IMG_UBYTE		ubTransitionWidth;
+typedef struct _IMG_WBUF
+{
+	IMG_WORD  *ptr;
+	IMG_SIZE  size;
+	IMG_INT		linestep;  /* offset from one row of image buffer to
+						   another on the same column in term of pixel */
+} IMG_WBUF;
 
-	IMG_REAL	rDummy[20];
-	IMG_UXLWORD	pvDummy[10];
+typedef struct _IMG_UWBUF
+{
+	IMG_UWORD  *ptr;
+	IMG_SIZE   size;
+	IMG_INT		linestep; /* offset from one row of image buffer to
+						  another on the same column in term of pixel */
+} IMG_UWBUF;
 
-}IMG_FEATUREPT;
+typedef struct _IMG_LWBUF
+{
+	IMG_LWORD  *ptr;
+	IMG_SIZE   size;
+	IMG_INT		linestep; /* offset from one row of image buffer to
+						  another on the same column in term of pixel */
+} IMG_LWBUF;
 
-/**
-* 边缘信息结构
+typedef struct _IMG_ULBUF
+{
+	IMG_ULWORD *ptr;
+	IMG_SIZE   size;
+	IMG_INT		linestep; /* offset from one row of image buffer to
+						  another on the same column in term of pixel */
+} IMG_ULBUF;
+
+typedef struct _IMG_RBUF
+{
+	IMG_REAL  *ptr;
+	IMG_SIZE  size;
+	IMG_INT		linestep;  /* offset from one row of image buffer to
+						   another on the same column in term of pixel */
+} IMG_RBUF;
+
+typedef struct _IMG_LRBUF
+{
+	IMG_LREAL *ptr;
+	IMG_SIZE  size;
+	IMG_INT		linestep;  /* offset from one row of image buffer to
+						   another on the same column in term of pixel */
+} IMG_LRBUF;
+
+typedef struct _IMG_VVBUF
+{
+	IMG_VVOID *ptr;
+	IMG_SIZE  size;
+	IMG_INT		linestep;  /* offset from one row of image buffer to
+						   another on the same column in term of pixel */
+} IMG_VVBUF;
+
+typedef struct _IMG_UXLBUF
+{
+	IMG_UXLWORD	*ptr;
+	IMG_SIZE	size;
+	IMG_INT		linestep;
+} IMG_UXLBUF;
+
+typedef struct _IMG_WINDOW
+{
+	IMG_COORD	coWindowOff;
+	IMG_SIZE	szWindowSize;
+} IMG_WINDOW;
+
+
+typedef struct _IMG_ParallelLINE
+{
+	IMG_RCOORD startPt1;
+	IMG_RCOORD endPt1;
+	IMG_RCOORD startPt2;
+	IMG_RCOORD endPt2;
+	IMG_REAL a;
+	IMG_REAL b;
+	IMG_REAL c1;
+	IMG_REAL c2;
+}IMG_ParallelLINE;
+
+/*
+* ROI define start
 */
-typedef struct _EDGE_INFORMATION
+typedef struct _IMG_LINE
 {
-	IMG_COORD coPos;	///<亚像素边缘整数坐标
-	IMG_RCOORD rcoPos;	///<亚像素边缘浮点数坐标
-	IMG_REAL gradient;		///<边缘梯度强度
-	IMG_REAL angle;			///<边缘梯度方向
-}EDGE_INFORMATION;
-
-typedef struct _CONTOUR_FEATURE{  //轮廓特征
-	IMG_COORD point;
-	IMG_RCOORD fpoint;
-	IMG_REAL grad;
-	IMG_REAL angle;
-	IMG_UINT contID;
-	IMG_UINT contPtID;
-	IMG_UINT contLen;
-	IMG_UINT samePoint;
-	IMG_UINT sameAng;
-	IMG_LREAL scor;
-	IMG_UXLWORD lrDummy[4];
-}CONTOUR_FEATURE;
-
-class CVisAlignRecordTable:public CViObject
-{
-public:
-	CVisAlignRecordTable();
-	~CVisAlignRecordTable() {};
-	void Serialize(CMEMPack &mp);
-	void SetLUTVersion(IMG_ULWORD ulLUTVer) { ulLUTVersion = ulLUTVer; }
-	IMG_SIZE					szTemplate;
-	IMG_INT                     mainDirection;                          ///<the main direction 
-	IMG_UBYTE					ubKernel;
-	IMG_SIZE					szEdgeKernel;
-	IMG_RCOORD					rcoRef;									///<coordinate of the reference point
-	IMG_UBYTE					ubNumOfLine;							///<number of line defined
-	IMG_UINT					aulNumPtsPerLine[ALIGN_MAX_NO_OF_LINE];	///<store the no. of points per boundary line 
-	//IMG_LINE_2PT_FORM			*pstLine2pt;							///<pointer to the straight lines	
-	IMG_UWORD					uwNumOfVoteFeature;						///<number of vote feature edge points 
-	IMG_UWORD					uwNumOfSpAFeature;						///<number of align feature edge points 
-	IMG_FEATUREPT				*pstVote;								///<vote feature edge point table
-	IMG_FEATUREPT				*pstSpA;								///<align feature edge point table
-	IMG_REAL					rMaxVoteLength;							///<Max vote length
-	IMG_REAL					rMaxSpALength;							///<Max align length
-	IMG_UBYTE					ubVoteScaleIndependent;					// IMG_TRUE/IMG_FALSE  
-	IMG_UBYTE					ubVoteRotationIndependent;				// IMG_TRUE/IMG_FALSE  
-	IMG_UBYTE					ubSpAScaleIndependent;					// IMG_TRUE/IMG_FALSE  
-	IMG_UBYTE					ubSpARotationIndependent;				// IMG_TRUE/IMG_FALSE  
-	IMG_UBYTE					ubVoteNDScaleDependent;
-	IMG_UBYTE					ubSpANDScaleDependent;
-
-	IMG_UWORD					uwNumOfConfirmRegion;
-	IMG_UWORD					uwNumOfConvexHullFeature;
-	IMG_UINT					*pulConvexHullFeatureIndex;
-
-	//IMG_UWORD					uwNumOfObjCorner;								//obj corner: for db disp
-	//IMG_RCOORD					arcoObjCorner[ALIGN_MAX_NO_OF_OBJ_CORNER];		//
-	//IMG_RCOORD					arcoROICorner[4];
-
-	IMG_UWORD					uwNumOfContours;
-	IMG_ULWORD					ulNumOfContourPts;
-	IMG_UWORD					uwExpVotingReduction;
-	IMG_REAL					rExpVotingElastic;
-	//Contour						
-	IMG_ULWORD					*pulContourPtIndex;
-	IMG_ULWORD					*pulContourID;
-	IMG_ULWORD					*pulContourLength;
-	CONTOUR_FEATURE				*pstContourPts;
-	//Record version 
-	IMG_CHAR					strRecordVersion[ALIGN_REC_PVCS_VER_MAX_LEN];
-	//learn self test search angle (9-15-06)				
-	IMG_UWORD					uwDummy[20];
-	IMG_UINT					ulDummy[20];
-	IMG_RCOORD					rcoDummy[20];
-	IMG_VVOID *					pvDummy[20];
-private:
-	IMG_ULWORD					ulLUTVersion;
-};
-
-
-
-typedef struct _VIS_ALIGN_RECORD{
-	IMG_UINT			ulLUTVersion;
-	IMG_RCOORD			rcoRef;
-	IMG_WINDOW			stTemplate;		///< Operation size in the learning phase
-	IMG_UINT			ulNumOfLayer;	///< Number of reductions done
-	IMG_REAL			rOrientation;	///< Orientation of the learnt object
-	IMG_UWORD			uwNumOfObjCorner;	///< effective number of corner
-	IMG_RCOORD			rcoPt[ALIGN_MAX_LEARN_CORNER];			///< Top left corner of ROI
-	IMG_RCOORD			rcoROI[4];
-	CVisAlignRecordTable		*ptr;			///<pointer to the LUTs at different resolutions
-	IMG_UINT			ulHighestLayer;	//Default: 0	reduction start level
-	IMG_RCOORD			rcoRefVector;	///<user defined ref point which can be anywhere	
-	IMG_REAL			rAspectRatio;			//x/y	
-	IMG_REAL			rLUTZoomFactor;			///<user input zoom factor respect to the current LUT	
-
-	IMG_WORD			wPreprocessType;
-	IMG_WORD			wPreprocessKSize;
-	IMG_REAL			rPreprocessGaussianSigma;
-
-	IMG_REAL            rSymmetricAngle;
-	IMG_RCOORD          rcoSymmetricCenter;
-	IMG_UBYTE			ubIsColor;
-
-	IMG_UWORD			uwNumOfSubLUT;			//Default: 0	
-	IMG_VVOID			*pvSubRec;				//Default: Null	
-	IMG_UWORD			uwNumOfLUTRelation;		//Default: 0	
-
-	IMG_UINT			ulTimeStamp;
-	IMG_UWORD			uwNumOfBackupRec;					//num of pstBackupRec
-	IMG_VVOID			*pstBackupRec;
-	IMG_CHAR			pcCommentOfRec[40];
-	IMG_UWORD			uwAntiAliasingLevel;
-
-	IMG_UWORD			uwDummy[19];
-	IMG_UINT			ulDummy[20];
-	IMG_RCOORD			rcoDummy[20];
-	IMG_VVOID *			pvDummy[20];
-}VIS_ALIGN_RECORD;
-
-
-
-typedef struct _VisPoint  //保存轮廓点的坐标
-{
-	IMG_COORD point;
-	//int x;
-	//int y;
-	IMG_UINT contourID;
-	IMG_UINT contourPtID;
-	IMG_UINT contourLen;
-}VisPoint;
-
-
-
-
-/**
-* 直线方程，ax+by+c=0
-*/
-typedef struct LineGeneralEquation
-{
+	IMG_RCOORD startPt;
+	IMG_RCOORD endPt;
 	IMG_REAL a;
 	IMG_REAL b;
 	IMG_REAL c;
-	IMG_REAL Score;
-	IMG_RCOORD PointStart;
-	IMG_RCOORD PointEnd;
-	IMG_REAL FittingError;
-	//IMG_REAL noSlope;
-}LINEAR_GENERNAL_EQUATION;
+	EDGETYPE edgeType;
+}IMG_LINE;
 
-typedef struct _LEARN_EDGE_INFORMATION
+typedef struct _IMG_RECT
 {
-	EDGE_INFORMATION	edge;
-	IMG_UINT			line_no;
-	IMG_REAL			edge_weight;
-}LEARN_EDGE_INFORMATION;
+	IMG_RCOORD	center;
+	IMG_RSIZE	size;
 
-typedef struct _CircleRecordInput
-{
-	IMG_REAL radius;
-	EDGETYPE edgetype; //from inner to outer, support 	ANY(not yet),LITGHT2DARK,DARK2LIGHT,
-	IMG_REAL ellipse_ratio; //major axis to minor axis, radius for major axis 
-	IMG_REAL ellipse_angle; //angle of major
-	IMG_UINT num_of_feature;
-	IMG_UINT num_of_layer;
-	IMG_UINT highest_layer;
-	IMG_UINT edge_kernel; //3 or 5
-	_CircleRecordInput()
-	{
-		radius = -1;
-		edgetype = EDGETYPE::LIGHT2DARK;
-		ellipse_ratio = 1;
-		num_of_feature = 100;
-		num_of_layer = 2;
-		highest_layer = 0;
-		edge_kernel = 5;
-	}
-}CIRCLE_RECORD_INPUT;
-#define ALIGN_REC_LINE_SEGMENT (0)
-#define ALIGN_REC_ARC_SEGMENT (1)
-#define ALIGN_REC_BSPLINE_SEGMENT (2)
-
-typedef struct _ALIGN_SEGMENT_CURVE
-{
-	IMG_RCOORD *control_points;
-	IMG_INT num_points;
-	int dims;
-	bool isClosed;
-	_ALIGN_SEGMENT_CURVE()
-	{
-		control_points = nullptr;
-		num_points = 0;
-		dims = 3;
-		isClosed = false;
-	}
-}ALIGN_SEGMENT_CURVE;
-
-typedef struct _ALIGN_REC_SEGMENT
-{
-	IMG_RCOORD start;
-	IMG_RCOORD center[2];
-	IMG_RCOORD end;
-	LINEDIRECTION edgedir;		//TYPE_LEFTHAND or TYPE_RIGHTHAND, from start to end
-	IMG_UBYTE seg_type;
-	IMG_ULWORD contour_id;
-	IMG_ULWORD valid;
-	IMG_ULWORD usePara;
-	IMG_ULWORD circleType;
-	IMG_ULWORD	ulDummy[20];
-	ALIGN_SEGMENT_CURVE curve;
-}ALIGN_REC_SEGMENT;
-typedef struct CVISALIGN_DLL_EXPORTS _GeneralSegmentRecordInput : public CViObject
-{
-public:
-	IMG_UWORD debug;
-	IMG_UWORD num_of_segment;
-	ALIGN_REC_SEGMENT *segment;
-	IMG_UINT num_of_feature;
-	IMG_UINT highest_layer;
-	IMG_UINT num_of_layer;
-	IMG_UINT edge_kernel;
-	IMG_CHAR debug_path[FILENAME_MAX_LENGTH];
-	IMG_UINT num_of_user_defined_pt;
-	IMG_RCOORD user_defined_pt[ALIGN_MAX_LEARN_CORNER];
-	IMG_RCOORD rcoRef;
-	IMG_UINT ulDummy[18];
-	void Serialize(CMEMPack& mp);
-	_GeneralSegmentRecordInput()
-	{
-		num_of_segment = 0;
-		segment = nullptr;
-		highest_layer = 0;
-		num_of_layer = 3;
-		edge_kernel = 5;
-		debug = ALIGN_DEBUG_NONE;
-		debug_path[0] = '\0';
-		segment_malloc_type = IMG_FALSE;
-		num_of_feature = 100;
-		num_of_user_defined_pt = 0;
-		memset(user_defined_pt, 0, sizeof(user_defined_pt));
-		rcoRef = { 0.0f,0.0f };
-		memset(ulDummy, 0, sizeof(ulDummy));
-	}
-	~_GeneralSegmentRecordInput()
-	{
-		if (segment_malloc_type)CVisMemPool::PFree(segment);
-	}
-private:
-	IMG_BOOL segment_malloc_type;
-
-}GENERAL_SEGMENT_RECORD_INPUT;
-typedef struct CVISALIGN_DLL_EXPORTS _SearchSegmentInput : public CViObject
-{
-public:
-	IMG_UWORD num_of_segment;
-	ALIGN_REC_SEGMENT *segment;
-	IMG_INT width, height, xOffset, yOffset;
-	IMG_REAL rAcceptScore;
-	IMG_INT iElasticity;
-	IMG_REAL pixel2mm;
-	IMG_UWORD uwDebug;
-	IMG_CHAR	strLogPath[FILENAME_MAX_LENGTH];
-	void Serialize(CMEMPack& mp);
-	void SetDebug(IMG_UWORD uwDebug, IMG_CHAR *path);
-	_SearchSegmentInput()
-	{
-		num_of_segment = 0;
-		segment = nullptr;
-		width = 0;
-		height = 0;
-		xOffset = 0;
-		yOffset = 0;
-		rAcceptScore = 0.7f;
-		iElasticity = 1;
-		segment_malloc_type = IMG_FALSE;
-		pixel2mm = 1.f;
-		uwDebug = 0;
-	}
-	~_SearchSegmentInput()
-	{
-		if (segment_malloc_type)CVisMemPool::PFree(segment);
-	}
-private:
-	IMG_BOOL segment_malloc_type;
-
-}SEARCH_SEGMENT_INPUT;
-struct _HTMLLOGGING;
-
-class  CVISALIGN_DLL_EXPORTS CVisAlignLearnOption : public CViObject
-{
-private:
-	ALIGN_LEARN_OPTION *learnInput;
-
-public:
-	CVisAlignLearnOption()
-	{
-		learnInput = (ALIGN_LEARN_OPTION *)CVisMemPool::PMalloc(sizeof(ALIGN_LEARN_OPTION));
-		if (learnInput == nullptr) THROW_VIS_EXCEPTION(MEM_ERR_MALLOC);
-		memset(learnInput, 0, sizeof(*learnInput));
-		learnInput->ulEdgeKernelSize = 5;
-		learnInput->ulReduction = 2;
-		learnInput->ulEdgeThreshold = 40;
-		learnInput->rUniquenessLevel = 0.7f;
-		learnInput->rRoationIndependenceThd = 0.7f;
-		learnInput->rScaleIndependenceThd = 0.7f;
-		learnInput->ulAdvOpt = ALIGN_LRN_ADV_SYMMETRIC_POS | ALING_LRN_ADV_SKIP_ROTATION_FEATURE_RESELECTION;
-		learnInput->rcoRef.x = learnInput->rcoRef.y = -1;
-		learnInput->ulLearnFetureSelection = 100;
-	};
-	CVisAlignLearnOption(const CVisAlignLearnOption &stLearnOption)
-	{
-		learnInput = (ALIGN_LEARN_OPTION *)CVisMemPool::PMalloc(sizeof(ALIGN_LEARN_OPTION));
-		if (learnInput == nullptr) THROW_VIS_EXCEPTION(MEM_ERR_MALLOC);
-		memcpy(learnInput, stLearnOption.learnInput, sizeof(*learnInput));
-	}
-	~CVisAlignLearnOption() { CVisMemPool::PFree(learnInput); };
-	void Serialize(CMEMPack& mp);
-	void Copy(const CVisAlignLearnOption &stLearnOption) { memcpy(learnInput, stLearnOption.learnInput, sizeof(*learnInput)); }
-	//Input
-#pragma region get()/set()
-
-	ALIGN_LEARN_OPTION *LearnInput() const { return learnInput; }
-	void LearnInput(ALIGN_LEARN_OPTION val) { *learnInput = val; }
-	void Set(CVisAlignLearnOption stLearnOption) { memcpy(learnInput, stLearnOption.learnInput, sizeof(*learnInput)); }
-	void SetRefPoint(IMG_RCOORD rcoRef) { learnInput->rcoRef = rcoRef; };
-	void GetRefPoint(IMG_RCOORD &rcoRef) { rcoRef = learnInput->rcoRef; };
-	void SetUniquenessLevel(IMG_REAL rUniquenessLevel) { learnInput->rUniquenessLevel = rUniquenessLevel; };
-	void GetUniquenessLevel(IMG_REAL &rUniquenessLevel) { rUniquenessLevel = learnInput->rUniquenessLevel; };
-	void SetRotScaleIndependenceThd(IMG_REAL rRoationIndependenceThd, IMG_REAL rScaleIndependenceThd) { learnInput->rRoationIndependenceThd = rRoationIndependenceThd, learnInput->rScaleIndependenceThd = rScaleIndependenceThd; };
-	void GetRotScaleIndependenceThd(IMG_REAL &rRoationIndependenceThd, IMG_REAL &rScaleIndependenceThd) { rRoationIndependenceThd = learnInput->rRoationIndependenceThd, rScaleIndependenceThd = learnInput->rScaleIndependenceThd; };
-	void SetReduction(IMG_UINT ulNumOfReduction, IMG_UINT ulHighestLayer = 0) { learnInput->ulHighestLayer = ulHighestLayer, learnInput->ulReduction = ulNumOfReduction; };
-	void GetReduction(IMG_UINT &ulNumOfReduction, IMG_UINT &ulHighestLayer) { ulHighestLayer = learnInput->ulHighestLayer, ulNumOfReduction = learnInput->ulReduction; };
-	IMG_UINT GetReductionNum() { return learnInput->ulReduction; };
-	void SetHighestLayer(IMG_UINT ulHighestLayer) { learnInput->ulHighestLayer = ulHighestLayer; };
-	void GetHighestLayer(IMG_UINT &ulHighestLayer) { ulHighestLayer = learnInput->ulHighestLayer; };
-	IMG_UINT GetHighestLayer() { return learnInput->ulHighestLayer; };
-	void SetLearnROI(IMG_COORD coUpperLeft, IMG_SIZE szWindow) { learnInput->stLearnROI.coWindowOff = coUpperLeft, learnInput->stLearnROI.szWindowSize = szWindow; };
-	void GetLearnROI(IMG_COORD &coUpperLeft, IMG_SIZE &szWindow) { coUpperLeft = learnInput->stLearnROI.coWindowOff, szWindow = learnInput->stLearnROI.szWindowSize; };
-	void SetTestROI(IMG_COORD coUpperLeft, IMG_SIZE szWindow) { learnInput->stTestROI.coWindowOff = coUpperLeft, learnInput->stTestROI.szWindowSize = szWindow; };
-	void GetTestROI(IMG_COORD &coUpperLeft, IMG_SIZE &szWindow) { coUpperLeft = learnInput->stTestROI.coWindowOff, szWindow = learnInput->stTestROI.szWindowSize; };
-	void SetEdgeMagnitude(IMG_UINT ulEdgeThreshold) { learnInput->ulEdgeThreshold = ulEdgeThreshold; };
-	void GetEdgeMagnitude(IMG_UINT &ulEdgeThreshold) { ulEdgeThreshold = learnInput->ulEdgeThreshold; };
-	IMG_UINT GetEdgeMagnitude() { return learnInput->ulEdgeThreshold; };
-	void SetEdgeKernel(IMG_UINT ulEdgeKernelSize) { learnInput->ulEdgeKernelSize = ulEdgeKernelSize; };
-	void GetEdgeKernel(IMG_UINT &ulEdgeKernelSize) { ulEdgeKernelSize = learnInput->ulEdgeKernelSize; };
-	void SetGaugeEdgeKernel(IMG_SIZE *pszKernel, IMG_UWORD uwNumOfReduction);
-	void GetGaugeEdgeKernel(IMG_SIZE szKernel[ALIGN_MAX_LEARN_REDUCTION]);
-	IMG_UINT GetEdgeKernel() { return learnInput->ulEdgeKernelSize; };
-	void SetLearnFeatNum(IMG_UINT ulLearnFeatNum) { learnInput->ulLearnFetureSelection = ulLearnFeatNum; };
-	void GetLearnFeatNum(IMG_UINT &ulLearnFetureSelection) { ulLearnFetureSelection = learnInput->ulLearnFetureSelection; };
-	IMG_UINT GetLearnFeatNum() { return learnInput->ulLearnFetureSelection; };
-	void SetLearnImageChannel(IMG_UINT ulImageChannel) { learnInput->ulImageChannel = ulImageChannel; };
-	void GetLearnImageChannel(IMG_UINT &ulImageChannel) { ulImageChannel = learnInput->ulImageChannel; };
-	IMG_UINT GetLearnImageChannel() { return learnInput->ulImageChannel; };
-	void SetCorner(IMG_UWORD uwCornerNum, IMG_RCOORD *rcoCorner)
-	{
-		learnInput->uwCornerNum = uwCornerNum > ALIGN_MAX_LEARN_CORNER ? ALIGN_MAX_LEARN_CORNER : uwCornerNum;
-		for (IMG_INT i = 0; i < uwCornerNum && i < ALIGN_MAX_LEARN_LINE; i++)learnInput->rcoCorner[i] = rcoCorner[i];
-	}
-	void GetCorner(IMG_UWORD &uwCornerNum, IMG_RCOORD rcoCorner[ALIGN_MAX_LEARN_CORNER])
-	{
-		for (IMG_INT i = 0; i < learnInput->uwCornerNum; i++)rcoCorner[i] = learnInput->rcoCorner[i];
-		uwCornerNum = learnInput->uwCornerNum;
-	}
-	void GetCornerNum(IMG_UWORD &uwCornerNum) { uwCornerNum = learnInput->uwCornerNum; }
-	IMG_UINT GetCornerNum() { return learnInput->uwCornerNum; }
-	void SetLine(IMG_UWORD uwLrnLineNum, IMG_LINE_FEAT_SEL *stLine)
-	{
-		learnInput->uwLrnLineNum = uwLrnLineNum > ALIGN_MAX_LEARN_LINE ? ALIGN_MAX_LEARN_LINE : uwLrnLineNum;
-		for (IMG_INT i = 0; i < uwLrnLineNum && i < ALIGN_MAX_LEARN_LINE; i++)learnInput->stLine[i] = stLine[i];
-	}
-	void GetLine(IMG_UWORD &uwLrnLineNum, IMG_LINE_FEAT_SEL stLine[ALIGN_MAX_LEARN_LINE])
-	{
-		for (IMG_INT i = 0; i < learnInput->uwLrnLineNum; i++)stLine[i] = learnInput->stLine[i];
-		uwLrnLineNum = learnInput->uwLrnLineNum;
-	}
-	void GetLineNum(IMG_UWORD &uwLrnLineNum) { uwLrnLineNum = learnInput->uwLrnLineNum; }
-	IMG_UINT GetLineNum() { return learnInput->uwLrnLineNum; }
-
-	void SetPreprocInfo(IMG_WORD wPreprocessMode, IMG_WORD wPreprocessKSize, IMG_REAL rPreprocParam)
-	{
-		learnInput->wPreprocKernelSize = wPreprocessKSize;
-		learnInput->wPreprocessMode = wPreprocessMode;
-		learnInput->rPreprocParam = rPreprocParam;
-	}
-	void GetPreprocInfo(IMG_WORD &wPreprocessMode, IMG_WORD &wPreprocessKSize, IMG_REAL &rPreprocParam)
-	{
-		wPreprocessKSize = learnInput->wPreprocKernelSize;
-		wPreprocessMode = learnInput->wPreprocessMode;
-		rPreprocParam = learnInput->rPreprocParam;
-	}
-
-	void SetSymmetricPositionAdjust(IMG_BOOL enable)
-	{
-		if(enable)	learnInput->ulAdvOpt |= ALIGN_LRN_ADV_SYMMETRIC_POS;
-		else		learnInput->ulAdvOpt &= ~ALIGN_LRN_ADV_SYMMETRIC_POS;
-	}
-	IMG_BOOL GetSymmetricPositionAdjust(void)
-	{
-		return (learnInput->ulAdvOpt & ALIGN_LRN_ADV_SYMMETRIC_POS) > 0;
-	}
-	void GetSymmetricPositionAdjust(IMG_BOOL &enable)
-	{
-		enable = (learnInput->ulAdvOpt & ALIGN_LRN_ADV_SYMMETRIC_POS) > 0;
-	}
-	void SetEdgeDetectionGaugeMode(IMG_BOOL enable)
-	{
-		if (enable)	learnInput->ulAdvOpt |= ALIGN_LRN_ADV_EDGE_GAUGE_MODE;
-		else		learnInput->ulAdvOpt &= ~ALIGN_LRN_ADV_EDGE_GAUGE_MODE;
-	}
-	IMG_BOOL GetEdgeDetectionGaugeMode(void)
-	{
-		return (learnInput->ulAdvOpt & ALIGN_LRN_ADV_EDGE_GAUGE_MODE) > 0;
-	}
-	void GetEdgeDetectionGaugeMode(IMG_BOOL &enable)
-	{
-		enable = (learnInput->ulAdvOpt & ALIGN_LRN_ADV_EDGE_GAUGE_MODE) > 0;
-	}
-	void SetRotationFeatureReSelection(IMG_BOOL enable)
-	{
-		if (enable)	learnInput->ulAdvOpt |= ALING_LRN_ADV_SKIP_ROTATION_FEATURE_RESELECTION;
-		else		learnInput->ulAdvOpt &= ~ALING_LRN_ADV_SKIP_ROTATION_FEATURE_RESELECTION;
-	}
-	IMG_BOOL GetRotationFeatureReSelection(void)
-	{
-		return (learnInput->ulAdvOpt & ALING_LRN_ADV_SKIP_ROTATION_FEATURE_RESELECTION) > 0;
-	}
-	void GetRotationFeatureReSelection(IMG_BOOL &enable)
-	{
-		enable = (learnInput->ulAdvOpt & ALING_LRN_ADV_SKIP_ROTATION_FEATURE_RESELECTION) > 0;
-	}
-	void SetAdvancedLearnOption(IMG_ULWORD option)
-	{
-		learnInput->ulAdvOpt = option;
-	}
-	IMG_ULWORD GetAdvancedLearnOption(void)
-	{
-		return (learnInput->ulAdvOpt);
-	}
-	void GetAdvancedLearnOption(IMG_ULWORD &option)
-	{
-		option = (learnInput->ulAdvOpt);
-	}
-
-	void SetDebug(IMG_UWORD uwDebug, IMG_CHAR *path);
-	void GetDebug(IMG_UWORD &uwDebug, IMG_CHAR *path, IMG_ULWORD pathlength);
-	void SetDebug(IMG_UWORD uwDebug, const IMG_CHAR *path);
-	IMG_CHAR * GetDebugPath()
-	{
-		return learnInput->strLogPath;
-	}
-	void GetDebugPath(IMG_CHAR *&path)
-	{
-		path = learnInput->strLogPath;
-	}
-	void SaveOptionToHTMLLog(struct _HTMLLOGGING *pstLog);
-
-#pragma endregion
-
-};
-
-
-class CVISALIGN_DLL_EXPORTS  CVisAlignRecord : public CViObject
-{
-public:
-	CVisAlignRecord();
-	//CVisAlignRecord(CVisAlignRecord &record);
-	CVisAlignRecord(const CVisAlignRecord &record);
-	~CVisAlignRecord();
-	VIS_ALIGN_RECORD *GetRecord() { return m_record; }
-	void SetRecord(const VIS_ALIGN_RECORD &val) { *m_record = val; }
-	void CopyRecordFrom(const VIS_ALIGN_RECORD &val);
-	void CopyRecordFrom(CVisAlignRecord &rec);
-	void CreateCircularRec(CIRCLE_RECORD_INPUT *pstInput);
-	void CreateSegmentRec(GENERAL_SEGMENT_RECORD_INPUT *pstInput);
-	void Free();
-	//output
-	VIS_ALIGN_RECORD *m_record;
-	void Serialize(CMEMPack& mp);
-	void GetSymmetricalAngle(IMG_REAL &rSymAngle) { rSymAngle = m_record->rSymmetricAngle; }
-	void GetSymmetricalCenter(IMG_RCOORD &rcoSymCenter) { rcoSymCenter = m_record->rcoSymmetricCenter; }
-	IMG_ULWORD GetTimeStamp(void) { return m_record->ulTimeStamp; }
-	IMG_BOOL GetRotationIndependentStatus(void);
-	IMG_BOOL GetScaleIndependentStatus(void);
-
-};
-
-#define ALIGN_MAX_LEARN_IMAGE_CHANNEL (10)
-class CVISALIGN_DLL_EXPORTS  CVisAlignLearn : public CViObject
-{
-public:
-	CVisAlignLearn();
-	~CVisAlignLearn();
-
-
-	CVisAlignLearnOption  m_cVisLearnOption;
-
-	IMG_UBBUF m_LearnImage[ALIGN_MAX_LEARN_IMAGE_CHANNEL];
-	IMG_UBBUF m_LearnMask;
-
-	CVisAlignRecord m_cVisRecord;
-private:
-	struct  _HTMLLOGGING *m_pHtmlLog;
-
-public:
-	bool SetImage(IMG_UBBUF *pubbLearnImage, IMG_UINT ulChannelNum);
-	bool SetImage(CVisImage &stLearnImage);
-	bool SetImage(const CVisImage &stLearnImage);
-	bool SetMask(IMG_UBBUF *pubbMask);
-	bool SetMask(CVisImage &stLearnMask);
-	bool SetMask(const CVisImage &stLearnMask);
-	bool SetInput(CVisAlignLearnOption &userInput);
-
-	IMG_VVOID learn();  // IMG_UBBUF m_LearnImage[1]);
-	CVisAlignRecord *GetRecord() { return &m_cVisRecord; }
-
-
-
-private:
-
-	//预处理
-	IMG_VVOID GetGaussianKernel_dim1(IMG_WORD *gaus, const IMG_INT size, const IMG_LREAL sigma);
-	IMG_VVOID GetGaussianKernel_dim2(IMG_LREAL **gaus, const IMG_INT size, const IMG_LREAL sigma);
-	//IMG_VVOID gaussfilter_new(IMG_UBYTE *&pSrc, IMG_INT size, IMG_LREAL sigma, IMG_SIZE roiSize, IMG_UBYTE *&pDst);
-
-	//金字塔
-	//IppStatus pyramid(CVisMemPool &mem_pool, IMG_UBYTE* pSrc, IMG_SIZE roiSize, IppiPyramid*&pPyrStruct, IMG_UBYTE ** &pPyrImage, IMG_INT level, IMG_LREAL sigma);
-	IMG_BOOL pyramid(CVisMemPool &mem_pool, CVisAlignLearnInterData &stInterData);
-
-	//IMG_VVOID edge_detection(IMG_UBBUF *pubbSrc, IMG_WINDOW *pstROI, IMG_WBUF *pwbufMag, IMG_UBBUF *pubbufEdge, IMG_RBUF *prbufAngle, IMG_INT threshold, IMG_INT kernalSize,
-	//	LEARN_EDGE_INFORMATION *&edgeArray, IMG_UINT &ulEdgeNum);
-	IMG_VVOID edge_detection(CVisAlignLearnInterData &stInterData);
-
-	//边缘过滤
-	//IMG_RCOORD edge_filter(IMG_UBBUF *pubbufEdge, IMG_RBUF *prbufAngle, IMG_WINDOW *pstLearnROI, IMG_UBBUF *pubbufMask, IMG_LINE_FEAT_SEL *pstLine, IMG_UINT uwLrnLineNum, IMG_UINT reduction, LEARN_EDGE_INFORMATION *edgeArray, IMG_UINT &ulEdgeNum);
-	IMG_RCOORD edge_filter(CVisAlignLearnInterData &stInterData);
-
-	//轮廓
-	//IMG_INT findContous(IMG_UBYTE *dstRoiE, IMG_INT roiRows, IMG_INT roiCols, IMG_INT &edgeNumber, IMG_INT &n, std::deque<VisPoint>& contDeq);
-	IMG_INT findContous(IMG_UBBUF *pubbufEdge, IMG_UWORD &startline, IMG_INT &edgeNumber, IMG_INT &n, std::deque<VisPoint>& contDeq);
-	//IMG_INT edge_linking(IMG_UBYTE *dstRoiE, IMG_INT roiRows, IMG_INT roiCols, IMG_INT &edgeNumber, IMG_INT &n, VisPoint *contourLink);
-	IMG_VVOID edge_linking(CVisAlignLearnInterData &stInterData);
-	//IMG_VVOID edge_linking(IMG_UBBUF *pubbufEdge, IMG_INT edgeNumber, IMG_INT &n, VisPoint *contourLink, IMG_INT &contour_num	);
-
-	//打分、选取特征点
-	//IMG_VVOID feature_scoring(IMG_WORD *dstRoi, IMG_UBYTE *dstRoiE, IMG_INT roiRows, IMG_INT roiCols, IMG_REAL *angAll, IMG_INT edgeNumber, IMG_INT &contNum, VisPoint *contourLink, CONTOUR_FEATURE *contourFeature);
-	IMG_VVOID feature_scoring(CVisAlignLearnInterData &stInterData);//std::vector< std::deque<VisPoint> > &contourTotal, float *contourFeature)
-	//IMG_VVOID feature_scoring(CVisAlignRecordTable *pstTable, IMG_UBBUF *pubbufEdge, IMG_WBUF *pwbufMag, IMG_RBUF *prbufAngle, IMG_INT edgeNumber, IMG_INT &contNum, VisPoint *contourLink, CONTOUR_FEATURE *contourFeature);//std::vector< std::deque<VisPoint> > &contourTotal, float *contourFeature)
-	//IMG_VVOID search_subpixel(CONTOUR_FEATURE *contourFeature, IMG_INT edgeNumber, LEARN_EDGE_INFORMATION *edgeArray, int ulEdgeNum, IMG_WINDOW &stROI);
-	IMG_VVOID search_subpixel(CVisAlignLearnInterData &stInterData);
-	//IMG_VVOID feature_selection(IMG_UBBUF *pubbSrc, IMG_COORD *prcoOff, CONTOUR_FEATURE *contourFeature, CVisAlignRecordTable &feature_table, IMG_INT edgeNumber, IMG_INT pointNumber, IMG_INT pyramidlevel, IMG_WINDOW &stROI, IMG_INT &main_direction);
-	IMG_VVOID feature_selection(CVisAlignLearnInterData &stInterData);
-
-	// //learn a single layer
-	IMG_VVOID learn_level(CVisAlignLearnInterData &stInterdata);
-	IMG_VVOID find_edge_line_id(LEARN_EDGE_INFORMATION *pstEdge, IMG_LINE_FEAT_SEL *pstLine, IMG_UINT ulLineNum, IMG_INT &line_no);
-
-	//rotation invariant test
-	IMG_VVOID rotation_invariant_test(CVisAlignLearnInterData &stInterData, CVisAlignRecord *pstRec, IMG_BOOL retest);
-	IMG_VVOID scale_invariant_test(CVisAlignLearnInterData &stInterData, CVisAlignRecord *pstRec);
-
-	//utility
-	void two_pt_to_line(IMG_RCOORD * prcoStart, IMG_RCOORD * prcoEnd, IMG_LREAL & a, IMG_LREAL & b, IMG_LREAL & c);
-	//log
-	void logInit(char *filename);
-	void writeLog(char * msg, ...);
-	void logfinish();
-	IMG_VVOID reselect_feature_for_rotation_invariant(CVisAlignLearnInterData & stInterData, CVisAlignRecord * pstRec, IMG_OBJ *pstObj, IMG_UINT ulObjNum);
-	void preprocess(CVisMemPool &mem_pool, CVisAlignLearnInterData &stInterData);
-};
-
-
-//////////////////////////////////////////////////////////
-//Search
-//////////////////////////////////////////////////////////
-class CVisAlignSearchInterData;
-enum ALIGN_SRCH_MULTIOBJ
-{
-	SRCH_MO_NEAREST = 1,
-	SRCH_MO_MULTIPLE = 2,
-	SRCH_MO_HIGHEST = 3,
-	SRCH_MO_NEAREST_OVERLAPREJ = 4,
-};
-
-typedef struct _ALIGN_SEARCH_PARA
-{
-	IMG_UWORD		uwDebug;
-	IMG_UBYTE		ubNumChannel;
-	IMG_UBYTE		ubRedFactor;
-	IMG_UWORD		uwEdgeThd;
-	IMG_UBYTE		ubOverlap;	//0 for no overlap, 1 for overlap
-	IMG_REAL		rOverlapScaleMargin;
-	IMG_UWORD		uwPhaseInv;
-	IMG_ULWORD		ulSrchTimestamp;
-	IMG_UBYTE		ubAngleMatchTolerance;
-	IMG_REAL		rRepeatingAngle;
-	IMG_REAL		rMinAngle;
-	IMG_REAL		rMaxAngle;
-	IMG_REAL		rMinScale;
-	IMG_REAL		rMaxScale;
-	IMG_UBYTE		ubColorMatchOpt;
-	ALIGN_SRCH_MULTIOBJ		MultiObj;
-	IMG_UWORD		uwCompleteObj;		//0 for incomplete object, 1 for complete object
-	IMG_UWORD		uwFixedNumObj;
-	IMG_REAL		rElasticity;
-	IMG_RCOORD		rcoMagFactor;
-	IMG_RCOORD		rcoRefPt;			//when set multiobj to nearest point, this is the point
-	IMG_REAL		rCoarseAcceptLevel;
-	IMG_REAL		rAcceptLevel;
-	IMG_REAL		rVoteRejMargin;
-	IMG_UBYTE		ubExactMatch;
-	IMG_CHAR		strLogPath[FILENAME_MAX_LENGTH];
-	IMG_UBYTE		ubFittingOption;
-	IMG_UBYTE		ubFastSearch;
-	IMG_REAL		rFittingSigma;
-	IMG_UWORD		uwIDStart;
-	IMG_WINDOW		stSearchROI;
-public:
-	void init()
-	{
-		uwDebug = 0;
-		ubNumChannel = 1;
-		ubRedFactor = 2;
-		uwEdgeThd = 10;
-		uwPhaseInv = 0;
-		ulSrchTimestamp = 0;
-		ubAngleMatchTolerance = 30;
-		rRepeatingAngle = 0;
-		rMinAngle = -5;
-		rMaxAngle = 5;
-		rMinScale = 1.0;
-		rMaxScale = 1.0;
-		ubColorMatchOpt = 0;
-		MultiObj = SRCH_MO_HIGHEST;
-		uwCompleteObj = IMG_TRUE;
-		uwFixedNumObj = 0;
-		rElasticity = 3;
-		rcoMagFactor = { 1,1 };
-		rcoRefPt = { 0,0 };
-		rCoarseAcceptLevel = 0.5f;
-		rAcceptLevel = 0.7f;
-		rVoteRejMargin = 0.0;
-		rOverlapScaleMargin = 1;
-		ubOverlap = IMG_FALSE;
-		ubExactMatch = IMG_FALSE;
-		_snprintf(strLogPath, sizeof(strLogPath), ".\\");
-		uwIDStart = 0;
-		ubFittingOption = ALIGN_SRCH_FITTING_GENERAL;
-		rFittingSigma = -1;
-		stSearchROI.coWindowOff = { -1,-1 };
-		stSearchROI.szWindowSize = { 0,0 };
-		ubFastSearch = 0;
-	}
-}ALIGN_SEARCH_OPTION;
-
-struct _IMG_OBJ
-{
-	IMG_RCOORD	rco;		//position
-	IMG_REAL	rotation;	//rotation
-	IMG_REAL	scale;		//scale
-	IMG_REAL	rMSE;		//fitting equation mean square error
-	IMG_REAL	rMatched;	//matched point percent
-	IMG_REAL	rVoteScore;	//voting score
-	IMG_REAL	rLikeScore;
-	IMG_UWORD	uwID;
-	IMG_REAL	rMx;
-	IMG_REAL	rMy;
-	IMG_UWORD	uwNumOfCorner;
-	IMG_RCOORD	arcoObjCorner[ALIGN_MAX_NO_OF_OBJ_CORNER];		//
-	IMG_RCOORD	arcoROICorner[4];
-	IMG_ULWORD	ulRecTimestamp;
-	IMG_ULWORD  ulDummy[40];
-};
-
-typedef struct _ALIGN_SRCH_RESULT
-{
-	IMG_ULWORD size;
-	IMG_UWORD	mode;
-	IMG_ULWORD maxsize;
-	IMG_OBJ *ptr;
-	IMG_ULWORD record_timestamp;
-}ALIGN_SRCH_RESULT;
-
-typedef enum _ALIGN_INPUT_TYPE {
-	ALIGN_POINT,
-	ALIGN_BUFFER,
-	ALIGN_2DCode
-}ALIGN_INPUT_TYPE;
-//////////////////////////////////////////////////////////////////////////
-// circle search 
-//////////////////////////////////////////////////////////////////////////
-typedef struct _IMG_CIRCLE_OBJ
-{
-	IMG_RCOORD rco;
-	IMG_REAL rotation; //for ellipse
-	IMG_REAL radius;
-	IMG_REAL ellipse_major;
-	IMG_REAL ellipse_minor;
-	IMG_REAL	rMSE;		//fitting equation mean square error
-	IMG_REAL	rMatched;	//matched point percent
-	IMG_REAL	rVoteScore;	//voting score
-	IMG_REAL	rLikeScore;
-	IMG_UWORD	uwID;
-}IMG_CIRCLE_OBJ;
-
-typedef struct _ALIGN_CIRCLE_RESULT
-{
-	IMG_ULWORD size;
-	IMG_UWORD	mode;
-	IMG_ULWORD maxsize;
-	IMG_UWORD	circle_type;
-	IMG_CIRCLE_OBJ *ptr;
-}ALIGN_CIRCLE_RESULT;
-
-
-class CVISALIGN_DLL_EXPORTS CVisCircleResult : public CViObject
-
-{
-public:
-	CVisCircleResult();
-	~CVisCircleResult();
-
-	ALIGN_CIRCLE_RESULT *Result() { return m_result; }
-	void Result(ALIGN_CIRCLE_RESULT &val) { *m_result = val; }
-	void Reset();
-	IMG_UINT Size(){return m_result->size;}
-	IMG_VVOID SetResultNum(IMG_UINT size);
-	IMG_RCOORD GetPosition(IMG_UINT position);
-	IMG_REAL GetRotation(IMG_UINT position);
-	IMG_REAL GetRadius(IMG_UINT position);
-	IMG_REAL GetMatchScore(IMG_UINT position);
-	IMG_REAL GetFittingScore(IMG_UINT position);
-	IMG_CIRCLE_OBJ *GetIMG_CIRCLE_OBJ(IMG_UINT position);
-	IMG_CIRCLE_OBJ *GetFirstIMG_CIRCLE_OBJ(void) { return m_result->ptr; }
-	IMG_VVOID RadiusRejection(IMG_REAL rMinRadius, IMG_REAL rMaxRadius);
-	IMG_VVOID OverlapRejection(IMG_UBYTE ubOverlap, IMG_REAL rScaleMargin);
-	void PrintTableInHTML(struct _HTMLLOGGING *pstLog, IMG_CHAR *title);
-	IMG_VVOID SetCircleType(IMG_UBYTE type);
-	IMG_VVOID GetCircleType(IMG_UBYTE &type);
-	IMG_UBYTE GetCircleType(void);
-public:
-	CVisAlignResultPointMatch *m_match;
-private:
-	ALIGN_CIRCLE_RESULT *m_result;		///< searchResult struct
-
-public:
-	void GetEdgeOfCircle(IMG_UWORD uwID, IMG_ULWORD & ulNumPts, IMG_RCOORD * Points);
-};
-
-typedef struct _ALIGN_SEARCH_CIRCLE_OPTION
-{
-	IMG_UWORD		uwDebug;
-	IMG_UBYTE		ubNumChannel;
-	IMG_UBYTE		ubRedFactor;
-	IMG_UBYTE		ubHighestLevel;
-	IMG_UWORD		uwFeatureNum;
-	IMG_UWORD		uwEdgeThd;
-	IMG_UWORD		uwEdgeKernel; //3 or 5
-	EDGETYPE		edgeType;
-	IMG_UBYTE		ubOverlap;	//0 for no overlap, 1 for overlap
-	IMG_UBYTE		ubCirType;		//0 for circle, 1 for ellipse
-	IMG_REAL		rFittingSigma; // default is -1
-	IMG_REAL		rOverlapScaleMargin;
-	IMG_UWORD		uwPhaseInv;
-	IMG_ULWORD		ulSrchTimestamp;
-	IMG_UBYTE		ubAngleMatchTolerance;
-	IMG_REAL		rMinRadius;
-	IMG_REAL		rMaxRadius;
-	IMG_REAL		rInitEllipseRatio;
-	IMG_UBYTE		ubColorMatchOpt;
-	ALIGN_SRCH_MULTIOBJ		MultiObj;
-	IMG_UWORD		uwCompleteObj;		//0 for incomplete object, 1 for complete object
-	IMG_UWORD		uwFixedNumObj;
-	IMG_REAL		rElasticity;
-	IMG_RCOORD		rcoMagFactor;
-	IMG_RCOORD		rcoRefPt;
-	IMG_REAL		rCoarseAcceptLevel;
-	IMG_REAL		rAcceptLevel;
-	IMG_REAL		rVoteRejMargin;
-	IMG_UBYTE		ubExactMatch;
-	IMG_CHAR		strLogPath[FILENAME_MAX_LENGTH];
-	IMG_WINDOW		stSearchROI;
-public:
-	void init()
-	{
-		uwDebug = 0;
-		ubNumChannel = 1;
-		ubRedFactor = 2;
-		ubHighestLevel = 0;
-		uwFeatureNum = 100;
-		uwEdgeThd = 10;
-		ubCirType = ALIGN_CIRCLE_TYPE;
-		rFittingSigma = -1;
-		uwPhaseInv = 0;
-		ulSrchTimestamp = 0;
-		ubAngleMatchTolerance = 30;
-		rMinRadius = 1.0;
-		rMaxRadius = 1.0;
-		rInitEllipseRatio = 1.0f;
-		ubColorMatchOpt = 0;
-		edgeType = EDGETYPE::LIGHT2DARK;
-		uwEdgeKernel = 5;
-		MultiObj = SRCH_MO_HIGHEST;
-		uwCompleteObj = IMG_TRUE;
-		uwFixedNumObj = 0;
-		rElasticity = 3;
-		rcoMagFactor = { 1,1 };
-		rcoRefPt = { 0,0};
-		rCoarseAcceptLevel = 0.7f;
-		rAcceptLevel = 0.85f;
-		rVoteRejMargin = 0.0;
-		rOverlapScaleMargin = 1;
-		ubOverlap = IMG_FALSE;
-		ubExactMatch = IMG_FALSE;
-		_snprintf(strLogPath, sizeof(strLogPath), ".");
-		stSearchROI.coWindowOff = { -1,-1 };
-		stSearchROI.szWindowSize = { 0,0 };
-	}
-}ALIGN_SEARCH_CIRCLE_OPTION;
-
-class CVISALIGN_DLL_EXPORTS CVisCircleSearchOption : public CViObject
-{
-public:
-	CVisCircleSearchOption()
-	{
-		m_searchPara = (ALIGN_SEARCH_CIRCLE_OPTION *)CVisMemPool::PMalloc(sizeof(ALIGN_SEARCH_CIRCLE_OPTION));
-		if (m_searchPara == nullptr) THROW_VIS_EXCEPTION(MEM_ERR_MALLOC);
-		m_searchPara->init();
-	};
-	//CVisCircleSearchOption(CVisCircleSearchOption &stSearchOption)
+	//IMG_RECT()
 	//{
-	//	m_searchPara = (ALIGN_SEARCH_CIRCLE_OPTION *)CVisMemPool::PMalloc(sizeof(ALIGN_SEARCH_CIRCLE_OPTION));
-	//	if (m_searchPara == nullptr) THROW_VIS_EXCEPTION(MEM_ERR_MALLOC);
-	//	memcpy(m_searchPara, stSearchOption.m_searchPara, sizeof(ALIGN_SEARCH_CIRCLE_OPTION));
-	//};
-	CVisCircleSearchOption(const CVisCircleSearchOption &stSearchOption)
-	{
-		m_searchPara = (ALIGN_SEARCH_CIRCLE_OPTION *)CVisMemPool::PMalloc(sizeof(ALIGN_SEARCH_CIRCLE_OPTION));
-		if (m_searchPara == nullptr) THROW_VIS_EXCEPTION(MEM_ERR_MALLOC);
-		memcpy(m_searchPara, stSearchOption.m_searchPara, sizeof(ALIGN_SEARCH_CIRCLE_OPTION));
-	};
-	~CVisCircleSearchOption()
-	{
-		CVisMemPool::PFree(m_searchPara);
-	}
-	void Copy(const CVisCircleSearchOption &stSearchOption)
-	{
-		memcpy(m_searchPara, stSearchOption.m_searchPara, sizeof(ALIGN_SEARCH_CIRCLE_OPTION));
-	}
+	//	center.x = 50.0f;
+	//	center.y = 50.0f;
+	//	size.width = 50.0f;
+	//	size.height = 40.0f;
+	//}
+	//IMG_RECT(IMG_INT centerX, IMG_INT centerY, IMG_INT width, IMG_INT height)
+	//{
+	//	center.x = (IMG_REAL)centerX;
+	//	center.y = (IMG_REAL)centerY;
+	//	size.width = (IMG_REAL)width;
+	//	size.height = (IMG_REAL)height;
+	//}
+	//IMG_RECT(IMG_REAL centerX, IMG_REAL centerY, IMG_REAL width, IMG_REAL height)
+	//{
+	//	center.x = centerX;
+	//	center.y = centerY;
+	//	size.width = width;
+	//	size.height = height;
+	//}
+	//IMG_RECT(IMG_RCOORD c, IMG_RSIZE s)
+	//{
+	//	center.x = c.x;
+	//	center.y = c.y;
+	//	size.width = s.width;
+	//	size.height = s.height;
+	//}
+	//IMG_RECT(IMG_ICOORD c, IMG_ISIZE s)
+	//{
+	//	center.x = (IMG_REAL)c.x;
+	//	center.y = (IMG_REAL)c.y;
+	//	size.width = (IMG_REAL)s.width;
+	//	size.height = (IMG_REAL)s.height;
+	//}
+}IMG_RECT;
 
-	// //////		VisAlignSearchOption get()/set()		//////////////////////////
-#pragma region get()/set()
-	ALIGN_SEARCH_CIRCLE_OPTION *GetSearchPara() { return m_searchPara; }
-	void SetSearchPara(ALIGN_SEARCH_CIRCLE_OPTION &val) { *m_searchPara = val; }
+typedef struct _IMG_RORECT
+{
+	IMG_RCOORD	center;
+	IMG_RSIZE	size;
+	IMG_LREAL	angle; //逆时针角度(0 - 360)
 
-	void SetRadius(IMG_REAL rMinRadius, IMG_REAL rMaxRadius) { m_searchPara->rMaxRadius = rMaxRadius, m_searchPara->rMinRadius = rMinRadius; }
-	void GetRadius(IMG_REAL &rMinRadius, IMG_REAL &rMaxRadius) { rMaxRadius = m_searchPara->rMaxRadius, rMinRadius = m_searchPara->rMinRadius; }
-	void SetRadius(IMG_REAL rMinRadius, IMG_REAL rMaxRadius, IMG_REAL rInitEllipseRatio) { m_searchPara->rMaxRadius = rMaxRadius, m_searchPara->rMinRadius = rMinRadius; m_searchPara->rInitEllipseRatio = rInitEllipseRatio; }
-	void GetRadius(IMG_REAL &rMinRadius, IMG_REAL &rMaxRadius, IMG_REAL &rInitEllipseRatio) { rMaxRadius = m_searchPara->rMaxRadius, rMinRadius = m_searchPara->rMinRadius; rInitEllipseRatio = m_searchPara->rInitEllipseRatio; }
-	void SetElasiticity(IMG_REAL rElasticity) { m_searchPara->rElasticity = rElasticity; }
-	void GetElasiticity(IMG_REAL &rElasticity) { rElasticity = m_searchPara->rElasticity; }
-	IMG_REAL GetElasiticity(void) { return m_searchPara->rElasticity; }
-	void SetDebug(IMG_UWORD uwDebug) { m_searchPara->uwDebug = uwDebug; }
-	void GetDebug(IMG_UWORD &uwDebug) { uwDebug = m_searchPara->uwDebug; }
-	IMG_UWORD GetDebug(void) { return m_searchPara->uwDebug; }
-	void SetDebugPath(const IMG_CHAR *pstrLogPath) { _snprintf(m_searchPara->strLogPath, sizeof(m_searchPara->strLogPath), "%s", pstrLogPath); }
-	void SetDebugPath(IMG_CHAR *pstrLogPath) { SetDebugPath((const IMG_CHAR *)pstrLogPath); }
-	void GetDebugPath(IMG_CHAR *pstrLogPath) { _snprintf(pstrLogPath, sizeof(m_searchPara->strLogPath), "%s", m_searchPara->strLogPath); }
-	IMG_CHAR *GetDebugPath(void) { return m_searchPara->strLogPath; }
-	void SetReduction(IMG_UBYTE ubRedFactor) { m_searchPara->ubRedFactor = ubRedFactor; }
-	void GetReduction(IMG_UBYTE &ubRedFactor) { m_searchPara->ubRedFactor = ubRedFactor; }
-	IMG_UBYTE GetReduction(void) { return m_searchPara->ubRedFactor; }
-	void SetHighestLayer(IMG_UBYTE ubHighestLayer) { m_searchPara->ubHighestLevel = ubHighestLayer; };
-	void GetHighestLayer(IMG_UBYTE &ulHighestLayer) { ulHighestLayer = m_searchPara->ubHighestLevel; };
-	IMG_UBYTE GetHighestLayer() { return m_searchPara->ubHighestLevel; };
-	void SetFeatureNum(IMG_UWORD uwFeatureNum) { m_searchPara->uwFeatureNum = uwFeatureNum; }
-	void GetFeatureNum(IMG_UWORD &uwFeatureNum) { m_searchPara->uwFeatureNum = uwFeatureNum; }
-	IMG_UWORD GetFeatureNum(void) { return m_searchPara->uwFeatureNum; }
-	void SetEdgeThreshold(IMG_UWORD uwEdgeThd) { m_searchPara->uwEdgeThd = uwEdgeThd; };
-	void GetEdgeThreshold(IMG_UWORD &uwEdgeThd) { uwEdgeThd = m_searchPara->uwEdgeThd; }
-	IMG_UWORD GetEdgeThreshold(void) { return m_searchPara->uwEdgeThd; }
-	void SetEdgeKernel(IMG_UWORD uwEdgeKernel) { m_searchPara->uwEdgeKernel = uwEdgeKernel; };
-	void GetEdgeKernel(IMG_UWORD &uwEdgeKernel) { uwEdgeKernel = m_searchPara->uwEdgeKernel; }
-	IMG_UWORD GetEdgeKernel(void) { return m_searchPara->uwEdgeKernel; }
-	void SetEdgeType(EDGETYPE edgeType) { m_searchPara->edgeType = edgeType; };
-	void GetEdgeType(EDGETYPE &edgeType) { edgeType = m_searchPara->edgeType; }
-	EDGETYPE GetEdgeType(void) { return m_searchPara->edgeType; }
-	void SetAcceptScore(IMG_REAL rAcceptLevel) { m_searchPara->rAcceptLevel = rAcceptLevel; }
-	void GetAcceptScore(IMG_REAL &rAcceptLevel) { rAcceptLevel = m_searchPara->rAcceptLevel; }
-	IMG_REAL GetAcceptScore(void) { return m_searchPara->rAcceptLevel; }
-	void SetCoarseAcceptScore(IMG_REAL rCoarseAcceptLevel) { m_searchPara->rCoarseAcceptLevel = rCoarseAcceptLevel; }
-	void GetCoarseAcceptScore(IMG_REAL &rCoarseAcceptLevel) { rCoarseAcceptLevel = m_searchPara->rCoarseAcceptLevel; }
-	IMG_REAL GetCoarseAcceptScore(void) { return m_searchPara->rCoarseAcceptLevel; }
-	void SetMultiObj(ALIGN_SRCH_MULTIOBJ MultiObj) { m_searchPara->MultiObj = MultiObj; }
-	void GetMultiObj(ALIGN_SRCH_MULTIOBJ &MultiObj) { MultiObj = m_searchPara->MultiObj; }
-	ALIGN_SRCH_MULTIOBJ GetMultiObj() { return m_searchPara->MultiObj; }
-	void SetCompleteObj(IMG_UWORD uwCompleteObj) { m_searchPara->uwCompleteObj = uwCompleteObj; }
-	void GetCompleteObj(IMG_UWORD &uwCompleteObj) { uwCompleteObj = m_searchPara->MultiObj; }
-	IMG_UWORD GetCompleteObj() { return m_searchPara->uwCompleteObj; }
-	void SetOverlap(IMG_UBYTE ubOverlap) { m_searchPara->ubOverlap = ubOverlap; }	//0 for no overlap result, 1 for overlap
-	void GetOverlap(IMG_UBYTE &ubOverlap) { ubOverlap = m_searchPara->ubOverlap; }
-	IMG_UBYTE GetOverlap(void) { return m_searchPara->ubOverlap; }
-	void SetOverlapScaleMargin(IMG_REAL rOverlapScaleMargin) { m_searchPara->rOverlapScaleMargin = rOverlapScaleMargin; }
-	void GetOverlapScaleMargin(IMG_REAL &rOverlapScaleMargin) { rOverlapScaleMargin = m_searchPara->rOverlapScaleMargin; }
-	IMG_REAL GetOverlapScaleMargin(void) { return m_searchPara->rOverlapScaleMargin; }
-	void SetPhaseInv(IMG_UWORD uwPhaseInv) { m_searchPara->uwPhaseInv = uwPhaseInv; }
-	void GetPhaseInv(IMG_UWORD &uwPhaseInv) { uwPhaseInv = m_searchPara->uwPhaseInv; }
-	IMG_UWORD GetPhaseInv(void) { return m_searchPara->uwPhaseInv; }
-	void SetCirType(IMG_UBYTE ubCirType) { m_searchPara->ubCirType = ubCirType; }	//0 for circle, 1 for ellipse
-	void GetCirType(IMG_UBYTE &ubCirType) { ubCirType = m_searchPara->ubCirType; }
-	IMG_UBYTE GetCirType(void) { return m_searchPara->ubCirType; }
-	void SetFittingSigma(IMG_REAL rFittingSigma) { m_searchPara->rFittingSigma = rFittingSigma; }
-	void GetFittingSigma(IMG_REAL &rFittingSigma) { rFittingSigma = m_searchPara->rFittingSigma; }
-	IMG_REAL GetFittingSigma(void) { return m_searchPara->rFittingSigma; }
-	void SetPtAngleTolerance(IMG_UBYTE ubAngleMatchTolerance) { m_searchPara->ubAngleMatchTolerance = ubAngleMatchTolerance; }	//0 for circle, 1 for ellipse
-	void GetPtAngleTolerance(IMG_UBYTE &ubAngleMatchTolerance) { ubAngleMatchTolerance = m_searchPara->ubAngleMatchTolerance; }
-	IMG_UBYTE GetPtAngleTolerance(void) { return m_searchPara->ubAngleMatchTolerance; }
-	void SetSearchROI(IMG_COORD &coUppleft, IMG_SIZE &szOp) { m_searchPara->stSearchROI.coWindowOff = coUppleft; m_searchPara->stSearchROI.szWindowSize = szOp; }
-	void GetSearchROI(IMG_COORD &coUppleft, IMG_SIZE &szOp) { coUppleft = m_searchPara->stSearchROI.coWindowOff; szOp = m_searchPara->stSearchROI.szWindowSize; }
-#pragma endregion< / span>
-	/////////////////////////////////////////////////////////////////////////////////
-	void Serialize(CMEMPack &mp);
-	void SaveOptionToHTMLLog(struct _HTMLLOGGING *pstLog);
-private:
-	ALIGN_SEARCH_CIRCLE_OPTION *m_searchPara;	///<searchOption parameters
+					   //IMG_RORECT()
+					   //{
+					   //	center.x = 0;
+					   //	center.y = 0;
+					   //	size.width = 0;
+					   //	size.height = 0;
+					   //	angle = 0;
+					   //}
+					   //IMG_RORECT(IMG_INT centerX, IMG_INT centerY, IMG_INT width, IMG_INT height, IMG_LREAL a)
+					   //{
+					   //	center.x = (IMG_REAL)centerX;
+					   //	center.y = (IMG_REAL)centerY;
+					   //	size.width = (IMG_REAL)width;
+					   //	size.height = (IMG_REAL)height;
+					   //	angle = a;
+					   //}
+					   //IMG_RORECT(IMG_REAL centerX, IMG_REAL centerY, IMG_REAL width, IMG_REAL height, IMG_LREAL a)
+					   //{
+					   //	center.x = centerX;
+					   //	center.y = centerY;
+					   //	size.width = width;
+					   //	size.height = height;
+					   //	angle = a;
+					   //}
+					   //IMG_RORECT(IMG_RCOORD c, IMG_RSIZE s, IMG_LREAL a)
+					   //{
+					   //	center.x = c.x;
+					   //	center.y = c.y;
+					   //	size.width = s.width;
+					   //	size.height = s.height;
+					   //	angle = a;
+					   //}
+					   //IMG_RORECT(IMG_ICOORD c, IMG_ISIZE s, IMG_LREAL a)
+					   //{
+					   //	center.x = (IMG_REAL)c.x;
+					   //	center.y = (IMG_REAL)c.y;
+					   //	size.width = (IMG_REAL)s.width;
+					   //	size.height = (IMG_REAL)s.height;
+					   //	angle = (IMG_REAL)a;
+					   //}
+}IMG_RORECT;
+
+typedef struct _IMG_POLYGON
+{
+	IMG_INT     count;
+	IMG_RCOORD* pCoods;
+
+	//IMG_POLYGON()
+	//{
+	//	count = 3;
+	//	pCoods = new IMG_RCOORD[3];
+	//	pCoods[0].x = 50.0f;
+	//	pCoods[0].y = 10.0f;
+	//	pCoods[1].x = 10.0f;
+	//	pCoods[1].y = 50.0f;
+	//	pCoods[2].x = 90.0f;
+	//	pCoods[2].y = 50.0f;
+	//}
+	//IMG_POLYGON(IMG_RCOORD* pPoints, IMG_INT nPtCount)
+	//{
+	//	count = nPtCount;
+	//	pCoods = new IMG_RCOORD[count];
+	//	for (int i = 0; i < count; i++)
+	//	{
+	//		pCoods[i].x = (IMG_REAL)pPoints[i].x;
+	//		pCoods[i].y = (IMG_REAL)pPoints[i].y;
+	//	}
+	//}
+	//IMG_POLYGON(IMG_ICOORD* pPoints, IMG_INT nPtCount)
+	//{
+	//	count = nPtCount;
+	//	pCoods = new IMG_RCOORD[count];
+	//	for (int i = 0; i < count; i++)
+	//	{
+	//		pCoods[i].x = (IMG_REAL)pPoints[i].x;
+	//		pCoods[i].y = (IMG_REAL)pPoints[i].y;
+	//	}
+	//}
+}IMG_POLYGON;
+
+typedef struct _IMG_CIRCLE
+{
+	IMG_RCOORD	center;
+	IMG_REAL	radius;
+
+	//IMG_CIRCLE()
+	//{
+	//	center.x = 100;
+	//	center.y = 100;
+	//	radius = 22;
+	//}
+	//IMG_CIRCLE(IMG_RCOORD ct, IMG_LREAL r)
+	//{
+	//	center = ct;
+	//	radius = (IMG_REAL)r;
+	//}
+}IMG_CIRCLE;
+
+typedef struct _IMG_RING
+{
+	IMG_RCOORD	center;
+	IMG_REAL	radius1;
+	IMG_REAL	radius2;
+
+	//IMG_RING()
+	//{
+	//	center.x = 0;
+	//	center.y = 0;
+	//	radius1 = 0;
+	//	radius2 = 0;
+	//}
+	//IMG_RING(IMG_RCOORD cnt, IMG_LREAL r1, IMG_LREAL r2)
+	//{
+	//	center = cnt;
+	//	radius1 = (IMG_REAL)r1;
+	//	radius2 = (IMG_REAL)r2;
+	//}
+}IMG_RING;
+
+struct IMG_ARCRING
+{
+	IMG_RCOORD	center;	
+	IMG_REAL radiusi;	
+	IMG_REAL radiuso;	
+	IMG_REAL start_angle;	
+	IMG_REAL end_angle;
 };
 
-typedef struct _ALIGN_VOTING_INFORMATION
+typedef struct _IMG_ARCT
 {
-	IMG_WBUF 	*pwbVoting;			///< voting space, malloc inside voting, must be free outside
-	IMG_REAL	*prAngle;			///< corresponding angle, malloc inside voting, must be free outside
-	IMG_UWORD	uwNumOfVoting;		///< angle step
-	IMG_ULWORD	ulMaxScore;
-	IMG_ULWORD	ulDummy[20];
-}ALIGN_VOTING_INFORMATION;
-class CVISALIGN_DLL_EXPORTS CVisAlignSearchOption : public CViObject
+	IMG_RCOORD center;
+	IMG_REAL radius;
+	IMG_REAL start_angle;
+	IMG_REAL end_angle;
+}IMG_ARCT;
+
+typedef struct _IMG_ELLIPSE
 {
-public:
-	CVisAlignSearchOption()
-	{
-		m_searchPara = (ALIGN_SEARCH_OPTION *)CVisMemPool::PMalloc(sizeof(ALIGN_SEARCH_OPTION));
-		if (m_searchPara == nullptr) THROW_VIS_EXCEPTION(MEM_ERR_MALLOC);
-		m_searchPara->init();
-	};
-	CVisAlignSearchOption(const CVisAlignSearchOption &stSearchOption)
-	{
-		m_searchPara = (ALIGN_SEARCH_OPTION *)CVisMemPool::PMalloc(sizeof(ALIGN_SEARCH_OPTION));
-		if (m_searchPara == nullptr) THROW_VIS_EXCEPTION(MEM_ERR_MALLOC);
-		memcpy(m_searchPara, stSearchOption.m_searchPara, sizeof(ALIGN_SEARCH_OPTION));
-	};
-	~CVisAlignSearchOption()
-	{
-		CVisMemPool::PFree(m_searchPara);
-	}
-	void Copy(const CVisAlignSearchOption &stSearchOption){	memcpy(m_searchPara, stSearchOption.m_searchPara, sizeof(ALIGN_SEARCH_OPTION));	}
-	//stSrchOp.rMinAngle = -180;
-	//stSrchOp.rMaxAngle = 180;
-	//stSrchOp.rElasticity = 3;
-	//stSrchOp.uwDebug = 256;
+	IMG_REAL a = 0, b = 0, c = 0, d = 0, e = 0, f = 0;
+	IMG_RCOORD	rco;
+	IMG_REAL axis_a;
+	IMG_REAL axis_b;
+	IMG_REAL angle;
+}IMG_ELLIPSE;
 
-	// //////		VisAlignSearchOption get()/set()		//////////////////////////
-#pragma region get()/set()
-	ALIGN_SEARCH_OPTION *GetSearchPara() { return m_searchPara; }
-	void SetSearchPara(ALIGN_SEARCH_OPTION &val) { *m_searchPara = val; }
+/*
+* ROI define end
+*/
 
-	void SetScale(IMG_REAL rMinScale, IMG_REAL rMaxScale) { m_searchPara->rMaxScale = rMaxScale, m_searchPara->rMinScale = rMinScale; }
-	void GetScale(IMG_REAL &rMinScale, IMG_REAL &rMaxScale) { rMaxScale = m_searchPara->rMaxScale, rMinScale = m_searchPara->rMinScale; }
-	void SetAngle(IMG_REAL rMinAngle, IMG_REAL rMaxAngle) { m_searchPara->rMaxAngle = rMaxAngle, m_searchPara->rMinAngle = rMinAngle; }
-	void GetAngle(IMG_REAL &rMinAngle, IMG_REAL &rMaxAngle) { rMaxAngle = m_searchPara->rMaxAngle, rMinAngle = m_searchPara->rMinAngle; }
-	void SetElasiticity(IMG_REAL rElasticity) { m_searchPara->rElasticity = rElasticity; }
-	void GetElasiticity(IMG_REAL &rElasticity) { rElasticity = m_searchPara->rElasticity; }
-	IMG_REAL GetElasiticity(void) { return m_searchPara->rElasticity; }
-	void SetDebug(IMG_UWORD uwDebug) { m_searchPara->uwDebug = uwDebug; }
-	void GetDebug(IMG_UWORD &uwDebug) { uwDebug = m_searchPara->uwDebug; }
-	IMG_UWORD GetDebug(void) { return m_searchPara->uwDebug; }
-	void SetDebugPath(const IMG_CHAR *pstrLogPath) { _snprintf(m_searchPara->strLogPath, sizeof(m_searchPara->strLogPath), "%s", pstrLogPath); }
-	void SetDebugPath(IMG_CHAR *pstrLogPath) { SetDebugPath((const IMG_CHAR*)pstrLogPath); }
-	void GetDebugPath(IMG_CHAR *pstrLogPath) { _snprintf(pstrLogPath, sizeof(m_searchPara->strLogPath), "%s", m_searchPara->strLogPath); }
-	IMG_CHAR *GetDebugPath(void) { return m_searchPara->strLogPath; }
-	void SetReduction(IMG_UBYTE ubRedFactor) { m_searchPara->ubRedFactor = ubRedFactor; }
-	void GetReduction(IMG_UBYTE &ubRedFactor) { m_searchPara->ubRedFactor = ubRedFactor; }
-	IMG_UBYTE GetReduction(void) { return m_searchPara->ubRedFactor; }
-	void SetEdgeThreshold(IMG_UWORD uwEdgeThd) { m_searchPara->uwEdgeThd = uwEdgeThd; };
-	void GetEdgeThreshold(IMG_UWORD &uwEdgeThd) { uwEdgeThd = m_searchPara->uwEdgeThd; }
-	IMG_UWORD GetEdgeThreshold(void) { return m_searchPara->uwEdgeThd; }
-	void SetAcceptScore(IMG_REAL rAcceptLevel) { m_searchPara->rAcceptLevel = rAcceptLevel; }
-	void GetAcceptScore(IMG_REAL &rAcceptLevel) { rAcceptLevel = m_searchPara->rAcceptLevel; }
-	IMG_REAL GetAcceptScore(void) { return m_searchPara->rAcceptLevel; }
-	void SetCoarseAcceptScore(IMG_REAL rCoarseAcceptLevel) { m_searchPara->rCoarseAcceptLevel = rCoarseAcceptLevel; }
-	void GetCoarseAcceptScore(IMG_REAL &rCoarseAcceptLevel) { rCoarseAcceptLevel = m_searchPara->rCoarseAcceptLevel; }
-	IMG_REAL GetCoarseAcceptScore(void) { return m_searchPara->rCoarseAcceptLevel; }
-	void SetMultiObj(ALIGN_SRCH_MULTIOBJ MultiObj) { m_searchPara->MultiObj = MultiObj; }
-	void GetMultiObj(ALIGN_SRCH_MULTIOBJ &MultiObj) { MultiObj = m_searchPara->MultiObj; }
-	ALIGN_SRCH_MULTIOBJ GetMultiObj() { return m_searchPara->MultiObj; }
-	void SetCompleteObj(IMG_UWORD uwCompleteObj) { m_searchPara->uwCompleteObj = uwCompleteObj; }
-	void GetCompleteObj(IMG_UWORD &uwCompleteObj) { uwCompleteObj = m_searchPara->MultiObj; }
-	IMG_UWORD GetCompleteObj() { return m_searchPara->uwCompleteObj; }
-	void SetOverlap(IMG_UBYTE ubOverlap) { m_searchPara->ubOverlap = ubOverlap; }
-	void GetOverlap(IMG_UBYTE &ubOverlap) { ubOverlap = m_searchPara->ubOverlap; }
-	IMG_UBYTE SetOverlap(void) { return m_searchPara->ubOverlap; }
-	void SetOverlapScaleMargin(IMG_REAL rOverlapScaleMargin) { m_searchPara->rOverlapScaleMargin = rOverlapScaleMargin; }
-	void GetOverlapScaleMargin(IMG_REAL &rOverlapScaleMargin) { rOverlapScaleMargin = m_searchPara->rOverlapScaleMargin; }
-	IMG_REAL GetOverlapScaleMargin(void) { return m_searchPara->rOverlapScaleMargin; }
-	void SetPhaseInv(IMG_UWORD uwPhaseInv) { m_searchPara->uwPhaseInv = uwPhaseInv; }
-	void GetPhaseInv(IMG_UWORD &uwPhaseInv) { uwPhaseInv = m_searchPara->uwPhaseInv; }
-	IMG_UWORD GetPhaseInv(void) { return m_searchPara->uwPhaseInv; }
-	void SetFitOption(IMG_UBYTE ubFittingOption) { m_searchPara->ubFittingOption = ubFittingOption; }
-	void GetFitOption(IMG_UBYTE &ubFittingOption) { ubFittingOption = m_searchPara->ubFittingOption; }
-	IMG_UBYTE GetFitOption(void) { return m_searchPara->ubFittingOption; }
-	void SetFittingSigma(IMG_REAL rFittingSigma) { m_searchPara->rFittingSigma = rFittingSigma; }
-	void GetFittingSigma(IMG_REAL &rFittingSigma) { rFittingSigma = m_searchPara->rFittingSigma; }
-	IMG_REAL GetFittingSigma(void) { return m_searchPara->rFittingSigma; }
-	void SetPtAngleTolerance(IMG_UBYTE ubAngleMatchTolerance) { m_searchPara->ubAngleMatchTolerance = ubAngleMatchTolerance; }	//0 for circle, 1 for ellipse
-	void GetPtAngleTolerance(IMG_UBYTE &ubAngleMatchTolerance) { ubAngleMatchTolerance = m_searchPara->ubAngleMatchTolerance; }
-	IMG_UBYTE GetPtAngleTolerance(void) { return m_searchPara->ubAngleMatchTolerance; }
-	void SetIDStart(IMG_UWORD uwIDStart) { m_searchPara->uwIDStart = uwIDStart; }	//0 for circle, 1 for ellipse
-	void GetIDStart(IMG_UWORD &uwIDStart) { uwIDStart = m_searchPara->uwIDStart; }
-	IMG_UWORD GetIDStart(void) { return m_searchPara->uwIDStart; }
-	void SetSearchROI(IMG_COORD &coUppleft, IMG_SIZE &szOp) { m_searchPara->stSearchROI.coWindowOff = coUppleft; m_searchPara->stSearchROI.szWindowSize = szOp; }
-	void GetSearchROI(IMG_COORD &coUppleft, IMG_SIZE &szOp) { coUppleft = m_searchPara->stSearchROI.coWindowOff; szOp = m_searchPara->stSearchROI.szWindowSize; }
-	void SetFastSearch(IMG_UBYTE ubFastSearch) { m_searchPara->ubFastSearch = ubFastSearch; }
-	IMG_UBYTE GetFastSearch(void) { return m_searchPara->ubFastSearch; }
-	void GetFastSearch(IMG_UBYTE &ubFastSearch) {ubFastSearch = m_searchPara->ubFastSearch; }
 
-#pragma endregion< / span>
-	/////////////////////////////////////////////////////////////////////////////////
-	void Serialize(CMEMPack &mp);
-	void SaveOptionToHTMLLog(struct _HTMLLOGGING *pstLog);
-private:
-	ALIGN_SEARCH_OPTION *m_searchPara;	///<searchOption parameters
-};
-class CVisAlignResultPointMatch
+// namespace vi
+// {
+/*
+* VI_VARENUM usage key,
+*/
+enum /*VI_VARENUM*/VIVARTYPE
 {
-	struct ObjMatchPt
-	{
-		IMG_UWORD	uwObjID;
-		IMG_UINT ulMatchedPt, ulAllocate;
-		IMG_FEATUREPT *feature;
-		EDGE_INFORMATION *translated_feature;
-		EDGE_INFORMATION *matched_edge;
-	};
-public:
-	CVisAlignResultPointMatch() { uwSize = 0; m_ObjMatchPt = nullptr; reduction = 0; };
-	~CVisAlignResultPointMatch()
-	{
-		Free();
-	}
-	void Join(CVisAlignResultPointMatch *another)
-	{
-		if (another == nullptr || another->uwSize == 0)return;
-		ObjMatchPt *new_match = (struct ObjMatchPt *)CVisMemPool::PMalloc(sizeof(struct ObjMatchPt)*(uwSize+another->uwSize));
-		VALIDATE_MALLOC(new_match);
-		for (IMG_INT i = 0; i < uwSize; i++)
-		{
-			new_match[i].feature = m_ObjMatchPt[i].feature;
-			new_match[i].translated_feature = m_ObjMatchPt[i].translated_feature;
-			new_match[i].matched_edge = m_ObjMatchPt[i].matched_edge;
-			new_match[i].ulAllocate = m_ObjMatchPt[i].ulAllocate;
-			new_match[i].ulMatchedPt = m_ObjMatchPt[i].ulMatchedPt;
-			new_match[i].uwObjID = m_ObjMatchPt[i].uwObjID;
-		}
-		for (IMG_INT i = uwSize, j = 0; j<another->uwSize; i++, j++)
-		{
-			IMG_UINT ulFeatureNum = another->m_ObjMatchPt[j].ulAllocate;
-			new_match[i].feature = (IMG_FEATUREPT *)CVisMemPool::PMalloc(sizeof(IMG_FEATUREPT)*ulFeatureNum);
-			VALIDATE_MALLOC(new_match[i].feature);
-			new_match[i].translated_feature = (EDGE_INFORMATION *)CVisMemPool::PMalloc(sizeof(EDGE_INFORMATION)*ulFeatureNum);
-			VALIDATE_MALLOC(new_match[i].translated_feature);
-			new_match[i].matched_edge = (EDGE_INFORMATION *)CVisMemPool::PMalloc(sizeof(EDGE_INFORMATION)*ulFeatureNum);
-			VALIDATE_MALLOC(new_match[i].matched_edge);
+	TYPE_EMPTY = 0,
+	TYPE_BYTE = 1,
+	TYPE_UBYTE = 2,
+	TYPE_WORD = 3,
+	TYPE_UWORD = 4,
+	TYPE_INT = 5,
+	TYPE_UINT = 6,
+	TYPE_LWORD = 7,
+	TYPE_ULWORD = 8,
+	TYPE_XLWORD = 9,
+	TYPE_UXLWORD = 10,
+	TYPE_REAL = 11,
+	TYPE_LREAL = 12,
 
-			memcpy(new_match[i].feature, another->m_ObjMatchPt[j].feature, sizeof(IMG_FEATUREPT)*ulFeatureNum);
-			memcpy(new_match[i].translated_feature, another->m_ObjMatchPt[j].translated_feature, sizeof(EDGE_INFORMATION)*ulFeatureNum);
-			memcpy(new_match[i].matched_edge, another->m_ObjMatchPt[j].matched_edge, sizeof(EDGE_INFORMATION)*ulFeatureNum);
-			new_match[i].ulAllocate = another->m_ObjMatchPt[j].ulAllocate;
-			new_match[i].ulMatchedPt = another->m_ObjMatchPt[j].ulMatchedPt;
-			new_match[i].uwObjID = another->m_ObjMatchPt[j].uwObjID;
-		}
-		if(m_ObjMatchPt)CVisMemPool::PFree(m_ObjMatchPt);
-		m_ObjMatchPt = new_match;
-		uwSize += another->uwSize;
-		reduction = another->reduction;
-	}
-	void Allocate(IMG_UINT ulFeatureNum, IMG_UWORD uwObjTabelSize)
-	{
-		Free();
-		m_ObjMatchPt = (struct ObjMatchPt *)CVisMemPool::PMalloc(sizeof(struct ObjMatchPt)*uwObjTabelSize);
-		VALIDATE_MALLOC(m_ObjMatchPt);
-		uwSize = uwObjTabelSize;
-		for (IMG_INT i = 0; i < uwSize; i++)
-		{
-			m_ObjMatchPt[i].feature = (IMG_FEATUREPT *)CVisMemPool::PMalloc(sizeof(IMG_FEATUREPT)*ulFeatureNum);
-			VALIDATE_MALLOC(m_ObjMatchPt[i].feature);
-			m_ObjMatchPt[i].translated_feature = (EDGE_INFORMATION *)CVisMemPool::PMalloc(sizeof(EDGE_INFORMATION)*ulFeatureNum);
-			VALIDATE_MALLOC(m_ObjMatchPt[i].translated_feature);
-			m_ObjMatchPt[i].matched_edge = (EDGE_INFORMATION *)CVisMemPool::PMalloc(sizeof(EDGE_INFORMATION)*ulFeatureNum);
-			VALIDATE_MALLOC(m_ObjMatchPt[i].matched_edge);
-			m_ObjMatchPt[i].ulAllocate = ulFeatureNum;
-			m_ObjMatchPt[i].ulMatchedPt = 0;
-			m_ObjMatchPt[i].uwObjID = 65535;
-		}
-	}
-	void Free()
-	{
-		if (m_ObjMatchPt != nullptr)
-		{
-			for (IMG_INT i = 0; i < uwSize; i++)
-			{
-				if (m_ObjMatchPt[i].feature)CVisMemPool::PFree(m_ObjMatchPt[i].feature);
-				if (m_ObjMatchPt[i].translated_feature)CVisMemPool::PFree(m_ObjMatchPt[i].translated_feature);
-				if (m_ObjMatchPt[i].matched_edge)CVisMemPool::PFree(m_ObjMatchPt[i].matched_edge);
-			}
-			CVisMemPool::PFree(m_ObjMatchPt);
-		}
-	}
-	void AddPair(IMG_UWORD uwObjID, IMG_FEATUREPT *p_feature, EDGE_INFORMATION *p_translated_feature, EDGE_INFORMATION *p_matched_edge)
-	{
-		for (IMG_INT i = 0; i < uwSize; i++)
-		{
-			if (m_ObjMatchPt[i].uwObjID == uwObjID)
-			{
-				m_ObjMatchPt[i].feature[m_ObjMatchPt[i].ulMatchedPt] = *p_feature;
-				m_ObjMatchPt[i].translated_feature[m_ObjMatchPt[i].ulMatchedPt] = *p_translated_feature;
-				m_ObjMatchPt[i].matched_edge[m_ObjMatchPt[i].ulMatchedPt] = *p_matched_edge;
-				m_ObjMatchPt[i].ulMatchedPt++;
-				break;
-			}
-			else if (m_ObjMatchPt[i].uwObjID == 65535)
-			{
-				m_ObjMatchPt[i].uwObjID = uwObjID;
-				m_ObjMatchPt[i].feature[m_ObjMatchPt[i].ulMatchedPt] = *p_feature;
-				m_ObjMatchPt[i].translated_feature[m_ObjMatchPt[i].ulMatchedPt] = *p_translated_feature;
-				m_ObjMatchPt[i].matched_edge[m_ObjMatchPt[i].ulMatchedPt] = *p_matched_edge;
-				m_ObjMatchPt[i].ulMatchedPt++;
-				break;
-			}
-		}
-	}
-	void GetObjMatchedPt(IMG_UWORD uwObjID, IMG_FEATUREPT *&p_feature, EDGE_INFORMATION *&p_translated_feature, EDGE_INFORMATION *&p_matched_edge, IMG_UINT &ulMatchedPt)
-	{
-		p_feature = nullptr;
-		p_translated_feature = p_matched_edge = nullptr;
-		ulMatchedPt = 0;
-		for (IMG_INT i = 0; i < uwSize; i++)
-		{
-			if (m_ObjMatchPt[i].uwObjID == uwObjID)
-			{
-				p_feature = m_ObjMatchPt[i].feature;
-				p_matched_edge = m_ObjMatchPt[i].matched_edge;
-				p_translated_feature = m_ObjMatchPt[i].translated_feature;
-				ulMatchedPt = m_ObjMatchPt[i].ulMatchedPt;
-				break;
-			}
-		}
-	}
-	IMG_UWORD reduction;
-private:
-	struct ObjMatchPt *m_ObjMatchPt;
-	IMG_UWORD uwSize;
-};
-class CVISALIGN_DLL_EXPORTS CVisAlignResult : public CViObject
-{
-public:
-	CVisAlignResult();
-	~CVisAlignResult();
+	TYPE_PPVOID = 100,
+	TYPE_PBYTE = 101,
+	TYPE_PUBYTE = 102,
+	TYPE_PWORD = 103,
+	TYPE_PUWORD = 104,
+	TYPE_PINT = 105,
+	TYPE_PUINT = 106,
+	TYPE_PLWORD = 107,
+	TYPE_PULWORD = 108,
+	TYPE_PXLWORD = 109,
+	TYPE_PUXLWORD = 110,
+	TYPE_PREAL = 111,
+	TYPE_PLREAL = 112,
+	TYPE_LPSTR = 113,
+	TYPE_LPWSTR = 114,
+	TYPE_PATH = 115,
 
-	ALIGN_SRCH_RESULT *Result() { return m_result; }
-	void Result(ALIGN_SRCH_RESULT &val) { *m_result = val; }
-	void Reset();
-	IMG_UINT Size();
-	void SortByFittingScore();
-	void SortByMatchScore();
-	void SortByPosition(POS_SORT_METHOD method);
-	void RejectByMatchScore(IMG_REAL rAcceptance, IMG_REAL rMargin);
-	void RejectByScale(IMG_REAL rMaxScale, IMG_REAL rMinScale, IMG_REAL rMargin);
-	void RejectByAngle(IMG_REAL rMaxAngle, IMG_REAL rMinAngle, IMG_REAL rRepeatAngle, IMG_REAL rMargin);
-	void PrintTableInHTML(struct _HTMLLOGGING *pstLog, IMG_CHAR *title);
-	void PrintTable(FILE *fp);
-	void ScaleTable(IMG_REAL scale);
-	void OffsetTable(IMG_RCOORD rcoOffset, IMG_UINT level);
-	IMG_BOOL SetMaxResultNum(IMG_UINT size);
-	IMG_VVOID SetResultNum(IMG_UINT size);
-	IMG_VVOID SetRecordTimeStamp(IMG_ULWORD timestampe) { m_result->record_timestamp = timestampe; }
-	IMG_ULWORD GetRecordTimeStamp(IMG_ULWORD timestampe) { return m_result->record_timestamp ; }
-	IMG_RCOORD GetPosition(IMG_UINT position);
-	IMG_REAL GetRotation(IMG_UINT position);
-	IMG_REAL GetScale(IMG_UINT position);
-	IMG_REAL GetMatchScore(IMG_UINT position);
-	IMG_REAL GetFittingScore(IMG_UINT position);
-	IMG_OBJ *GetIMG_OBJ(IMG_UINT position);
-	IMG_OBJ *GetFirstIMG_OBJ(void) { return m_result->ptr; }
-	IMG_VVOID Join(CVisAlignResult *another_table);
-	IMG_VVOID TranslateObjectImage(CVisImage &src, CVisImage &dst, IMG_UINT position = 0);
-	IMG_VVOID DrawObjInColorBuffer(CVisImage &img, CVisAlignRecord *pstRec, IMG_UWORD uwObjIndex);
-	CVisAlignResultPointMatch *m_match;
-	void RejectObjectByOverlap(CVisAlignRecordTable *pstTable1, CVisAlignRecordTable *pstTable2, IMG_REAL rScaleRejMargin, IMG_REAL rScoreRejMargin, IMG_ULWORD reduction);
-	void RejectCircleObjectByOverlap(CVisAlignRecordTable *pstTable1, CVisAlignRecordTable *pstTable2, IMG_REAL rScaleRejMargin, IMG_REAL rScoreRejMargin, IMG_ULWORD level);
-	IMG_VVOID AddObject(IMG_OBJ *pstObj, IMG_UINT num);
-private:
-	ALIGN_SRCH_RESULT *m_result;		///< searchResult struct
-
-public:
-	void Serialize(CMEMPack &mp);
-	void GetCoutoursOfObjs(IMG_ULWORD & num_of_pts, CONTOUR_FEATURE * contour_pts, CVisAlignRecord *pstRec);
-	void GetPointsOfObjs(IMG_ULWORD & num_of_pts, IMG_RCOORD * contour_pts, CVisAlignRecord *pstRec);
+	TYPE_PVIVARIANT = 160,
+	TYPE_LPVIBASE = 161
 };
 
-class CVISALIGN_DLL_EXPORTS CVisAlignSearch : public CViObject
-{
-public:
-	CVisAlignSearch();
-	~CVisAlignSearch();
+//typedef unsigned short VIVARTYPE;
 
-private:
-	CVisAlignSearchOption	m_SearchOption;	///<SearchOption成员变量
-	CVisAlignResult			m_AlignResult;			///<AlignResult成员变量
-	CVisAlignRecord			*m_AlignRecord;			///<AlignRecord成员变量
-													//VisAlignLearnOption	m_LearnOption;	///<LearnOption成员变量
-													//CVisLog m_myLog;						///<Log成员变量
-	struct  _HTMLLOGGING *m_pHtmlLog;
+typedef struct tagVIVARIANT {
+	VIVARTYPE vt;
+	union
+	{
+		//TYPE_EMPTY = 0,
+		IMG_BYTE		cVal;		//TYPE_BYTE = 1,
+		IMG_UBYTE		ucVal;		//TYPE_UBYTE = 2,
+		IMG_WORD		wVal;		//TYPE_WORD = 3,
+		IMG_UWORD		uwVal;		//TYPE_UWORD = 4,
+		IMG_INT			iVal;		//TYPE_INT = 5,
+		IMG_UINT		uiVal;		//TYPE_UINT = 6,
+		IMG_LWORD		lwVal;		//TYPE_LWORD = 7,
+		IMG_ULWORD		ulwVal;		//TYPE_ULWORD = 8,
+		IMG_XLWORD		xlwVal;		//TYPE_XLWORD = 9,
+		IMG_UXLWORD		uxlwVal;	//TYPE_UXLWORD = 10,
+		IMG_REAL		rVal;		//TYPE_REAL = 11,
+		IMG_LREAL		lrVal;		//TYPE_LREAL = 12,
 
-public:
-	IMG_VVOID search(CVisImage &Src);
-	IMG_VVOID search(CVisImage &Src, CVisImage *Mask);
-	IMG_VVOID search(IMG_UBBUF &Src);
-	IMG_VVOID search(IMG_UBBUF &Src, IMG_UBBUF *Mask);	//mask could be nullptr
-	IMG_VVOID search(const CVisImage& SrcImage);
-	IMG_VVOID search(const IMG_UBBUF &Src);
-	IMG_VVOID search_circle(CVisImage &Src, CVisCircleSearchOption &Option, CVisCircleResult &Result);
-	IMG_VVOID search_circle(CVisImage &Src, CVisImage *Mask, CVisCircleSearchOption &Option, CVisCircleResult &Result);
-	IMG_VVOID search_circle(const CVisImage &Src, CVisCircleSearchOption &Option, CVisCircleResult &Result);
+		IMG_PVVOID		pVoid;		//TYPE_PPVOID = 100,
+		IMG_PBYTE		pcVal;		//TYPE_PBYTE = 101,
+		IMG_PUBYTE		pucVal;		//TYPE_PUBYTE = 102,
+		IMG_PWORD		pwVal;		//TYPE_PWORD = 103,
+		IMG_PUWORD		puwVal;		//TYPE_PUWORD = 104,
+		IMG_PINT		piVal;		//TYPE_PINT = 105,
+		IMG_PUINT		puiVal;		//TYPE_PUINT = 106,
+		IMG_PLWORD		plwVal;		//TYPE_PLWORD = 107,
+		IMG_PULWORD		pulwVal;	//TYPE_PULWORD = 108,
+		IMG_PXLWORD		pxlwVal;	//TYPE_PXLWORD = 109,
+		IMG_PUXLWORD	puxlwVal;	//TYPE_PUXLWORD = 110,
+		IMG_PREAL		prVal;		//TYPE_PREAL = 111,
+		IMG_PLREAL		plrVal;		//TYPE_PLREAL = 112,
+		IMG_LPSTR		pszVal;		//TYPE_LPSTR = 113,
+		IMG_LPWSTR		pwszVal;	//TYPE_LPWSTR = 114,
+		IMG_PBYTE		pPath;		//TYPE_PATH = 115,
 
-	IMG_VVOID search_segment(SEARCH_SEGMENT_INPUT &Stinput);
-	IMG_VVOID match_segment(SEARCH_SEGMENT_INPUT &Stinput);
-	IMG_VVOID match_segment(CVisImage *srcImg, IMG_INT imgNums, SEARCH_SEGMENT_INPUT &Stinput);
-	//IMG_VVOID search_origin(char *path);		
-	CVisAlignResult *GetSearchResult() { return &m_AlignResult; }
-	IMG_VVOID SetRecord(CVisAlignRecord *pstRec);
-	CVisAlignRecord * GetRecord() { return m_AlignRecord; };
-	IMG_VVOID SetSearchOption(CVisAlignSearchOption *pstSrchOpt);
+		tagVIVARIANT*	pvtVal;		//TYPE_PVIVARIANT = 160,
+		IMG_PVIBASE     pvibVal;	//TYPE_LPVIBASE = 161,
+	} Val;
 
-	IMG_VVOID SaveResultImage(CVisImage &Src, const IMG_CHAR *pathname);
-	IMG_VVOID SaveResultImage(IMG_UBBUF &Src, const IMG_CHAR *pathname);
-	/*IMG_VVOID setPara(CVisAlignLearnOption m_LearnOption)*/
-	//IMG_VVOID SetLearnOption(ALIGN_LEARN_OPTION &stOption);
+} VIVARIANT, *PVIVARIANT;
 
-private:
+//}
 
-	IMG_VVOID __GetGaussianKernel_dim1(IMG_WORD *&gaus, const IMG_INT size, const double sigma);
-	IMG_VVOID __GetGaussianKernel_dim2(IMG_LREAL **gaus, const IMG_INT size, const double sigma);
+typedef void(__stdcall *TEMP_IMAGE_CALLBACK)(void* callBackOwner, IMG_UBYTE* pData, int nDataSiz, int wid, int het, int channel);
 
-
-	IMG_INT preprocess(CVisAlignSearchInterData & m_AlignExData);
-	IMG_INT pyramid(CVisAlignSearchInterData &m_AlignExData);
-
-	IMG_INT edgeExtract_dstRoi(CVisAlignSearchInterData & m_AlignExData);
-
-	IMG_LREAL FeatEdgeNormalDistance(IMG_LRCOORD *edge, IMG_LRCOORD *feature, IMG_REAL feature_dir);
-	IMG_LREAL FeatEdgeTangentDistance(IMG_LRCOORD *edge, IMG_LRCOORD *feature, IMG_REAL feature_dir);
-	IMG_INT back_match(CVisAlignSearchInterData &m_AlignExData);
-
-	IMG_INT iterationfit(CVisAlignSearchInterData &m_AlignExData);
-	IMG_INT iterationfit_RTS(CVisAlignSearchInterData &m_AlignExData);
-	IMG_INT iterationfit_fixangle(CVisAlignSearchInterData &m_AlignExData);
-	IMG_INT iterationfit_fixscale(CVisAlignSearchInterData &m_AlignExData);
-	IMG_INT iterationfit_fixanglescale(CVisAlignSearchInterData &m_AlignExData);
-	IMG_INT iterationfit_ellipse(CVisAlignSearchInterData &m_AlignExData);
-
-	IMG_VVOID saveResult(CVisAlignSearchInterData & m_AlignExData);
-	IMG_VVOID coarse_search(CVisAlignSearchInterData &m_AlignExData);
-	IMG_WORD coarse_search_kernel(IMG_UBBUF	*pubbEpbuf, IMG_COORD *pcoSoff, IMG_WBUF *pwbDir, IMG_COORD	*pcoDiroff, IMG_SIZE *pszOpsize, CVisAlignRecordTable *pstEptable, ALIGN_SRCH_RESULT *psrOptable,
-		ALIGN_SEARCH_OPTION	*pstSrchOpt, ALIGN_INPUT_TYPE InputType, ALIGN_VOTING_INFORMATION	*pstVotingInfo, IMG_REAL rScale, IMG_UWORD uwScaleLoopIndex, IMG_UWORD *puwNextObjID);
-	IMG_WORD generate_mask_core(IMG_UWBUF const *puwbCombined,IMG_UBYTE **ppubDirEdge,IMG_UBBUF const *pubMask,IMG_SIZE const *pszOpsize,CVisAlignRecordTable const *pstEptable,IMG_REAL const rScaleX,IMG_REAL const rScaleY,
-		IMG_ULWORD const ulNumOfRotation,IMG_REAL const rAcceptLevel,IMG_REAL const rMaxVectorLength,IMG_UWORD		uwPhase,IMG_REAL const rStartAngle,IMG_REAL const rEndAngle,IMG_UWORD const uwCompleteObj,IMG_UWORD const uwScaleLoopIndex,
-		IMG_LWBUF **pplwbufMask,IMG_UBYTE *pubMaskflag, IMG_ULWORD *pulMaskNum,IMG_UWORD uwMultipleObj,ALIGN_SEARCH_OPTION	const *pstSrchOpt,IMG_ULWORD const ulReductionLevel,ALIGN_INPUT_TYPE InputType,IMG_UWORD uwDebug);
-
-	void logInit(char *filename);
-	//void writeLog(char * msg);
-	void writeLog(char * msg, ...);
-	void logfinish();
-	IMG_VVOID translate_object_table(CVisAlignResult & stObjTable, IMG_RCOORD * prcoOffset);
-	IMG_VVOID scale_object_table(CVisAlignResult &stObjtable, IMG_REAL scale_factor);
-	IMG_VVOID search_level(CVisAlignSearchInterData &stIntermediate, IMG_INT level);
-	IMG_VVOID searchseg_level(CVisAlignSearchInterData &stIntermediate, IMG_INT level, ALIGN_REC_SEGMENT *segInput, IMG_INT segNums);
-	IMG_INT back_match_segment(CVisAlignSearchInterData &stAlignExData, ALIGN_REC_SEGMENT *segInput, IMG_INT segNums);
-	IMG_INT points_compute_circletype(IMG_UBBUF *ubbfImg, IMG_RCOORD *pCoor, IMG_INT ptNums, IMG_RCOORD centerPt, IMG_ULWORD &circleType, IMG_INT count = 2);
-};
 #endif
+/* End of file. */
