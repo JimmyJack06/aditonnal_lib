@@ -1,0 +1,58 @@
+#pragma once
+#include <ViType.h>
+typedef struct _RGBQ
+{
+	IMG_UBYTE b, g, r, reserved;
+}RGBQ;
+typedef struct _IMG3D_POINT_XYZI
+{
+	IMG_REAL x, y, z;
+	union
+	{
+		IMG_REAL intensity;
+		IMG_UINT info;
+		RGBQ color;
+	};
+}IMG3D_RCOORDI;
+typedef struct _IMG3D_RPOINT_XYZ
+{
+	IMG_REAL x, y, z;
+}IMG3D_RCOORD;
+typedef struct _IMG3D_POINT_XYZ
+{
+	IMG_INT x, y, z;
+}IMG3D_COORD;
+typedef struct _IMG3D_QUATERNION
+{
+	IMG_REAL qx, qy, qz, qw;
+}IMG3D_QUATERNION;
+typedef struct _IMG3D_NORMAL_DIRECTION
+{
+	IMG_REAL nx, ny, nz;
+	IMG_REAL info;//for 4 bytes align
+}IMG3D_NORMRAL_DIR;
+typedef struct _IMG3D_VIEWPOINT
+{
+	IMG3D_RCOORDI origin_pt;
+	IMG3D_QUATERNION view_angle;
+}IMG3D_VIEWPOINT;
+typedef struct _IMG3D_SIZE
+{
+	IMG_UINT sx, sy, sz;
+}IMG3D_SIZE;
+typedef struct _IMG3D_RSIZE
+{
+	IMG_REAL sx, sy, sz;
+}IMG3D_RSIZE;
+
+typedef struct _IMG3D_RMATRIX
+{
+	IMG_REAL *ptr;
+	int rows;
+	int cols;
+}IMG3D_RMATRIX;
+typedef struct _IMG3D_TRANSMATRIX
+{
+	IMG_REAL rot[9];
+	IMG_REAL trans[3];
+}IMG3D_TRANSMATRIX;
