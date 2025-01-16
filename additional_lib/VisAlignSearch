@@ -10173,11 +10173,6 @@ IMG_VVOID CVisAlignSearch::match_segment(CVisImage *srcImg, IMG_INT imgNums, SEA
 							imgEdge.DrawLine(tempCoor, coor, COLORS::Red);
 						}
 					}
-					if (pCoor)
-					{
-						delete[]pCoor;
-						pCoor = nullptr;
-					}
 					vecDstPoints.clear();
 				}
 				break;
